@@ -1,0 +1,6 @@
+{
+  "name": "Healno",
+  "description": "Healno is a calm, supportive, AI-powered health companion designed for chronic condition management, symptom and medication tracking, energy pacing, nutrition, and care coordination.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
