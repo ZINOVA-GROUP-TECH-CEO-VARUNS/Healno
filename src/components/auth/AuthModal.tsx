@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   X,
 } from 'lucide-react';
+import { HealnoLogo } from '../common/HealnoLogo';
+import { WelcomeHealthcareIllustration } from '../common/CodeIllustrations';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -25,9 +27,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onStartOnboarding,
 }) => {
   const [authMode, setAuthMode] = useState<'login' | 'signup' | 'otp' | 'forgot'>('login');
-  const [email, setEmail] = useState('jose.maria@healno.app');
-  const [password, setPassword] = useState('••••••••');
-  const [phone, setPhone] = useState('+1 (555) 234-5678');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [consentAccepted, setConsentAccepted] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -80,36 +82,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-[#132A1F]/80 backdrop-blur-md flex items-center justify-center p-4">
       <div className="bg-[#FAF8F5] w-full max-w-md rounded-3xl overflow-hidden shadow-2xl border border-[#132A1F]/10 animate-in zoom-in-95 duration-200">
-        {/* Visual Hero Header featuring cloud rest illustration */}
-        <div className="relative h-44 overflow-hidden bg-[#132A1F]">
-          <img
-            src="/src/assets/images/healno_cloud_rest_1792488329446.jpg"
-            alt="Gentle character resting peacefully on a cloud"
-            referrerPolicy="no-referrer"
-            className="w-full h-full object-cover opacity-85"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#132A1F] via-[#132A1F]/40 to-transparent" />
+        {/* Visual Hero Header featuring code-based illustration */}
+        <div className="relative py-6 px-5 bg-gradient-to-br from-[#132A1F] to-[#2D6A4F] text-white flex items-center justify-between">
+          <div className="space-y-1 z-10">
+            <div className="flex items-center gap-2 text-[#FF7A24] text-xs font-bold mb-0.5">
+              <HealnoLogo size="xs" />
+              <span>Welcome to Healno</span>
+            </div>
+            <h2 className="text-xl font-bold font-display text-white">A Calm Space for Your Health</h2>
+            <p className="text-xs text-white/70">Private, secure, and spoon-conscious</p>
+          </div>
+
+          <div className="shrink-0 pl-3">
+            <WelcomeHealthcareIllustration className="w-16 h-16" />
+          </div>
 
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 text-white flex items-center justify-center hover:bg-black/60 transition-colors"
+            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/30 text-white flex items-center justify-center hover:bg-black/50 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
-
-          <div className="absolute bottom-3 left-4 right-4 text-white">
-            <div className="flex items-center gap-2 text-[#B7E4C7] text-xs font-semibold mb-0.5">
-              <div className="w-5 h-5 rounded-md bg-white p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
-                <img
-                  src="/assets/aistudio/Orange_Cross_Heart_Medical_Icon_bd9b638a.png"
-                  alt="Healno Logo"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-              <span>Welcome to Healno</span>
-            </div>
-            <h2 className="text-xl font-bold font-display">A Calm Space for Your Health</h2>
-          </div>
         </div>
 
         {/* Content body */}

@@ -1,13 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { UserProfile } from '../../types';
+import { HealnoLogo } from '../common/HealnoLogo';
+import { storageService } from '../../services/storage';
 import {
   ChevronRight,
   ChevronLeft,
-  Sparkles,
   Check,
-  Heart,
+  Search,
+  Plus,
+  Trash2,
+  Edit2,
   Shield,
-  X,
+  User,
+  Activity,
+  Pill,
+  Sparkles,
+  Sliders,
+  CheckCircle2,
+  Heart,
+  Calendar,
+  AlertCircle,
+  HelpCircle,
 } from 'lucide-react';
 
 interface OnboardingWizardProps {
@@ -17,29 +30,149 @@ interface OnboardingWizardProps {
   initialProfile: UserProfile;
 }
 
+interface MedicationEntry {
+  id: string;
+  name: string;
+  category: string;
+  dosage: string;
+  frequency: string;
+  isCurrent: boolean;
+  notes: string;
+}
+
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   isOpen,
   onClose,
   onComplete,
   initialProfile,
 }) => {
+  // 7 Structured Onboarding Steps
   const [step, setStep] = useState(1);
-  const totalSteps = 6;
+  const totalSteps = 7;
 
-  // Form states
-  const [name, setName] = useState(initialProfile.name || 'Jose Maria');
-  const [age, setAge] = useState(initialProfile.age || 32);
-  const [gender, setGender] = useState(initialProfile.gender || 'Non-binary');
-  const [conditions, setConditions] = useState<string[]>(initialProfile.conditions || ['Dysautonomia / POTS']);
-  const [commonSymptoms, setCommonSymptoms] = useState<string[]>(initialProfile.commonSymptoms || ['Fatigue', 'Brain Fog']);
-  const [medsSummary, setMedsSummary] = useState(initialProfile.currentMedicationsSummary || 'Electrolytes, CoQ10');
-  const [dailySpoons, setDailySpoons] = useState(initialProfile.dailySpoonsCapacity || 12);
-  const [dietaryPrefs, setDietaryPrefs] = useState<string[]>(initialProfile.dietaryPreferences || ['Low Histamine']);
-  const [allergies, setAllergies] = useState<string[]>(initialProfile.allergies || ['Penicillin']);
+  // Step 1: Personal Profile
+  const [name, setName] = useState(initialProfile.name || '');
+  const [email] = useState(initialProfile.email || '');
+  const [ageGroup, setAgeGroup] = useState<string>('25-34');
+  const [gender, setGender] = useState<string>('Prefer not to say');
+
+  // Step 2: Health Conditions
+  const [conditionsSearch, setConditionsSearch] = useState('');
+  const [selectedConditions, setSelectedConditions] = useState<string[]>(initialProfile.conditions || []);
+  const [customConditionInput, setCustomConditionInput] = useState('');
+
+  // Step 3: Symptoms
+  const [symptomsSearch, setSymptomsSearch] = useState('');
+  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>(initialProfile.commonSymptoms || []);
+  const [customSymptomInput, setCustomSymptomInput] = useState('');
+
+  // Step 4: Medicines & Supplements
+  const [medsList, setMedsList] = useState<MedicationEntry[]>([]);
+  const [showAddMedForm, setShowAddMedForm] = useState(false);
+  const [newMedName, setNewMedName] = useState('');
+  const [newMedCategory, setNewMedCategory] = useState('Vitamins & Supplements');
+  const [newMedDosage, setNewMedDosage] = useState('');
+  const [newMedFrequency, setNewMedFrequency] = useState('Daily');
+  const [newMedNotes, setNewMedNotes] = useState('');
+
+  // Step 5: Daily-Life Impact
+  const [impactAreas, setImpactAreas] = useState<string[]>([]);
+  const [symptomBehavior, setSymptomBehavior] = useState<string>('Fluctuates depending on activity');
+  const [supportGoals, setSupportGoals] = useState<string[]>([]);
+
+  // Step 6: Healthcare Preferences
+  const [sharingPreference, setSharingPreference] = useState<string>('Personal reflection & tracking only');
+  const [trackingMethods, setTrackingMethods] = useState<string[]>([]);
+
+  // Resume partial progress if available
+  useEffect(() => {
+    if (isOpen) {
+      const savedProgress = storageService.getOnboardingProgress();
+      if (savedProgress) {
+        if (savedProgress.step) setStep(savedProgress.step);
+        if (savedProgress.name) setName(savedProgress.name);
+        if (savedProgress.ageGroup) setAgeGroup(savedProgress.ageGroup);
+        if (savedProgress.gender) setGender(savedProgress.gender);
+        if (savedProgress.selectedConditions) setSelectedConditions(savedProgress.selectedConditions);
+        if (savedProgress.selectedSymptoms) setSelectedSymptoms(savedProgress.selectedSymptoms);
+        if (savedProgress.medsList) setMedsList(savedProgress.medsList);
+        if (savedProgress.impactAreas) setImpactAreas(savedProgress.impactAreas);
+        if (savedProgress.symptomBehavior) setSymptomBehavior(savedProgress.symptomBehavior);
+        if (savedProgress.supportGoals) setSupportGoals(savedProgress.supportGoals);
+        if (savedProgress.sharingPreference) setSharingPreference(savedProgress.sharingPreference);
+        if (savedProgress.trackingMethods) setTrackingMethods(savedProgress.trackingMethods);
+      }
+    }
+  }, [isOpen]);
+
+  // Save partial progress upon step change
+  const saveProgressState = (currentStep: number) => {
+    storageService.saveOnboardingProgress({
+      step: currentStep,
+      name,
+      ageGroup,
+      gender,
+      selectedConditions,
+      selectedSymptoms,
+      medsList,
+      impactAreas,
+      symptomBehavior,
+      supportGoals,
+      sharingPreference,
+      trackingMethods,
+    });
+  };
+
+  const handleNext = () => {
+    const nextStep = Math.min(totalSteps, step + 1);
+    setStep(nextStep);
+    saveProgressState(nextStep);
+  };
+
+  const handleBack = () => {
+    const prevStep = Math.max(1, step - 1);
+    setStep(prevStep);
+    saveProgressState(prevStep);
+  };
+
+  // Final confirmation & dashboard activation
+  const handleCompleteAll = () => {
+    storageService.clearOnboardingProgress();
+
+    // Save actual user medications if any were added
+    medsList.forEach((m) => {
+      storageService.saveMedication({
+        id: m.id,
+        name: m.name,
+        dosage: m.dosage || 'As directed',
+        scheduleTimes: ['08:00'],
+        timeSlot: 'Morning',
+        instructions: m.notes || m.frequency,
+        isAsNeeded: m.frequency.toLowerCase().includes('needed'),
+        category: m.category.includes('Prescription') ? 'Prescription' : 'Supplement',
+      });
+    });
+
+    const summaryMedString = medsList.map((m) => `${m.name} ${m.dosage}`.trim()).join(', ');
+
+    onComplete({
+      name: name.trim() || 'Health Friend',
+      gender,
+      conditions: selectedConditions,
+      commonSymptoms: selectedSymptoms,
+      currentMedicationsSummary: summaryMedString,
+      dailySpoonsCapacity: 12,
+      isOnboarded: true,
+      isAuthenticated: true,
+    });
+
+    onClose();
+  };
 
   if (!isOpen) return null;
 
-  const toggleArrayItem = (list: string[], item: string, setter: (val: string[]) => void) => {
+  // Toggle helper
+  const toggleItem = (list: string[], item: string, setter: (val: string[]) => void) => {
     if (list.includes(item)) {
       setter(list.filter((x) => x !== item));
     } else {
@@ -47,325 +180,827 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     }
   };
 
-  const handleFinish = () => {
-    onComplete({
-      name,
-      age,
-      gender,
-      conditions,
-      commonSymptoms,
-      currentMedicationsSummary: medsSummary,
-      dailySpoonsCapacity: dailySpoons,
-      dietaryPreferences: dietaryPrefs,
-      allergies,
-      isOnboarded: true,
-      isAuthenticated: true,
-    });
-    onClose();
+  // Condition Categories
+  const conditionCategories = [
+    { name: 'Common Conditions', items: ['Asthma', 'Migraines', 'Hypertension', 'Insomnia', 'Chronic Sinusitis'] },
+    { name: 'Autoimmune', items: ["Hashimoto's Thyroiditis", 'Lupus (SLE)', 'Rheumatoid Arthritis', 'Celiac Disease', 'Multiple Sclerosis'] },
+    { name: 'Allergies', items: ['Seasonal Allergies', 'Food Allergies', 'Medication Allergy', 'Environmental Sensitivity'] },
+    { name: 'Pain-Related', items: ['Fibromyalgia', 'Chronic Lower Back Pain', 'Neuropathic Pain', 'Myofascial Pain'] },
+    { name: 'Gut & Digestion', items: ['Irritable Bowel Syndrome (IBS)', 'GERD / Acid Reflux', 'SIBO', 'Crohn’s Disease'] },
+    { name: 'Hormonal', items: ['PCOS', 'Endometriosis', 'Hypothyroidism', 'Perimenopause / Menopause'] },
+    { name: 'Metabolism', items: ['Type 2 Diabetes', 'Insulin Resistance', 'Metabolic Syndrome', 'Prediabetes'] },
+    { name: 'Heart & Circulation', items: ['Postural Orthostatic Tachycardia (POTS)', 'Dysautonomia', 'Orthostatic Hypotension', 'Palpitations'] },
+    { name: 'Brain & Nerves', items: ['ME/CFS (Chronic Fatigue Syndrome)', 'Peripheral Neuropathy', 'Brain Fog', 'Post-Concussion'] },
+    { name: 'Mental Health', items: ['Generalized Anxiety', 'Depression', 'PTSD', 'ADHD'] },
+    { name: 'Skin Conditions', items: ['Eczema', 'Psoriasis', 'Rosacea', 'Urticaria (Hives)'] },
+  ];
+
+  // Symptom Categories
+  const symptomCategories = [
+    { name: 'General', items: ['Persistent Fatigue', 'Post-Exertional Malaise', 'Unrefreshing Sleep', 'Weakness'] },
+    { name: 'Pain & Aches', items: ['Joint Pain', 'Muscle Aches', 'Tension Headache', 'Neck & Shoulder Stiffness'] },
+    { name: 'Digestion', items: ['Abdominal Bloating', 'Nausea', 'Stomach Cramps', 'Early Satiety'] },
+    { name: 'Heart & Breathing', items: ['Palpitations / Racing Heart', 'Shortness of Breath', 'Lightheadedness on Standing', 'Chest Heaviness'] },
+    { name: 'Skin & Body', items: ['Flushing / Temperature Shifts', 'Dry Skin', 'Cold Extremities', 'Swelling'] },
+    { name: 'Mind & Sleep', items: ['Brain Fog / Word Finding', 'Difficulty Concentrating', 'Restless Sleep', 'Racing Thoughts'] },
+    { name: 'Senses & Nerves', items: ['Light Sensitivity', 'Sound Sensitivity', 'Dizziness', 'Tingling in Hands/Feet'] },
+    { name: 'Hormonal', items: ['Night Sweats', 'Sudden Energy Dips', 'Mood Fluctuations', 'Fluid Retention'] },
+  ];
+
+  const medicationCategories = [
+    'Pain Relief',
+    'Nerve Pain',
+    'Heart & Circulation',
+    'Allergies & Histamine',
+    'Digestion & Gut',
+    'Hormones & Thyroid',
+    'Mental Health & Mood',
+    'Sleep Support',
+    'Vitamins & Supplements',
+    'Other Prescription / OTC',
+  ];
+
+  const impactList = [
+    { id: 'energy', label: 'Energy & Fatigue', icon: '⚡', desc: 'Running out of energy before the day finishes' },
+    { id: 'sleep', label: 'Restorative Sleep', icon: '🌙', desc: 'Waking up feeling unrefreshed or waking often' },
+    { id: 'concentration', label: 'Cognitive Focus', icon: '🧠', desc: 'Word-finding difficulty, brain fog, or memory lag' },
+    { id: 'mobility', label: 'Physical Stamina & Mobility', icon: '🚶', desc: 'Standing, stairs, or physical endurance' },
+    { id: 'routine', label: 'Personal Care & Routine', icon: '🛁', desc: 'Bathing, dressing, and gentle daily activities' },
+    { id: 'household', label: 'Household Responsibilities', icon: '🧹', desc: 'Cooking, dishes, laundry, or home chores' },
+    { id: 'work_school', label: 'Work, School & Study', icon: '💼', desc: 'Meeting deadlines without triggering post-exertional crashes' },
+    { id: 'social', label: 'Social & Emotional Peace', icon: '🌿', desc: 'Maintaining connections while protecting energy' },
+  ];
+
+  const handleAddMed = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMedName.trim()) return;
+
+    const entry: MedicationEntry = {
+      id: `med_${Date.now()}`,
+      name: newMedName.trim(),
+      category: newMedCategory,
+      dosage: newMedDosage.trim() || 'Unspecified',
+      frequency: newMedFrequency,
+      isCurrent: true,
+      notes: newMedNotes.trim(),
+    };
+
+    setMedsList((prev) => [...prev, entry]);
+    setNewMedName('');
+    setNewMedDosage('');
+    setNewMedNotes('');
+    setShowAddMedForm(false);
+  };
+
+  const handleRemoveMed = (id: string) => {
+    setMedsList((prev) => prev.filter((m) => m.id !== id));
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#132A1F]/90 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-[#FAF8F5] w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl border border-[#132A1F]/10 flex flex-col max-h-[92vh]">
-        {/* Top Header & Step Progress */}
-        <div className="p-4 pb-3 bg-[#132A1F] text-white">
+    <div className="fixed inset-0 z-50 bg-[#132A1F]/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-[#FAF8F5] w-full max-w-xl rounded-3xl overflow-hidden shadow-2xl border border-[#132A1F]/10 flex flex-col max-h-[94vh] animate-in fade-in duration-200">
+        {/* Top Header & Step Progress Indicator */}
+        <div className="p-4 bg-[#132A1F] text-white shrink-0">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold text-[#B7E4C7] uppercase tracking-wider">
-              Step {step} of {totalSteps}
-            </span>
-            <button
-              onClick={onClose}
-              className="text-xs text-white/60 hover:text-white"
-            >
-              Skip for now
-            </button>
+            <div className="flex items-center gap-2">
+              <HealnoLogo size={26} />
+              <span className="text-[11px] font-bold tracking-wider text-[#FF7A24] uppercase font-display">
+                Healno Onboarding
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[#B7E4C7] font-semibold">
+                Step {step} of {totalSteps}
+              </span>
+              {/* Individual Skip for Now button on optional steps */}
+              {step > 1 && step < 7 && (
+                <button
+                  onClick={handleNext}
+                  className="text-xs text-white/70 hover:text-white underline decoration-white/30 ml-2"
+                >
+                  Skip for now
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+          {/* Progress Bar */}
+          <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
             <div
-              className="h-full bg-[#E89D35] rounded-full transition-all duration-300"
+              className="h-full bg-gradient-to-r from-[#FF8F3D] to-[#FF7A24] rounded-full transition-all duration-300"
               style={{ width: `${(step / totalSteps) * 100}%` }}
             />
           </div>
         </div>
 
-        {/* Scrollable Step Content */}
-        <div className="p-5 overflow-y-auto flex-1 space-y-4">
-          {/* Step 1: Basics */}
+        {/* Scrollable Step Body */}
+        <div className="p-5 overflow-y-auto flex-1 space-y-5">
+          {/* STEP 1: Personal Profile */}
           {step === 1 && (
             <div className="space-y-4 animate-in fade-in">
               <div className="text-center pb-2">
-                <div className="w-14 h-14 rounded-2xl bg-white border border-[#132A1F]/10 p-2.5 shadow-xs flex items-center justify-center mx-auto mb-2">
-                  <img
-                    src="/assets/aistudio/Orange_Cross_Heart_Medical_Icon_bd9b638a.png"
-                    alt="Healno Logo"
-                    className="w-full h-full object-contain"
-                  />
+                <div className="w-14 h-14 rounded-2xl bg-[#FFF4EB] border border-[#FF7A24]/30 flex items-center justify-center mx-auto mb-2 text-[#FF7A24]">
+                  <User className="w-7 h-7" />
                 </div>
-                <h3 className="text-lg font-bold text-[#132A1F] font-display">
-                  Welcome to Healno
+                <h3 className="text-xl font-bold text-[#132A1F] font-display">
+                  Welcome! Let's get acquainted.
                 </h3>
-                <p className="text-xs text-[#132A1F]/70 mt-1 max-w-xs mx-auto">
-                  Let's personalize your companion so it fits your real daily energy.
+                <p className="text-xs text-[#132A1F]/70 mt-1 max-w-sm mx-auto">
+                  Healno adapts to your real pace. We never invent or share your personal health identity.
                 </p>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-[#132A1F] block mb-1">Preferred Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-3 py-2 text-sm focus:outline-none"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3 bg-white p-4.5 rounded-2xl border border-[#132A1F]/10 shadow-xs">
                 <div>
-                  <label className="text-xs font-semibold text-[#132A1F] block mb-1">Age</label>
-                  <input
-                    type="number"
-                    value={age}
-                    onChange={(e) => setAge(Number(e.target.value))}
-                    className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-3 py-2 text-sm focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-[#132A1F] block mb-1">Gender (Optional)</label>
+                  <label className="text-xs font-bold text-[#132A1F] block mb-1">
+                    Your Real Name or Preferred Display Name *
+                  </label>
                   <input
                     type="text"
-                    value={gender}
-                    onChange={(e) => setGender(e.target.value)}
-                    placeholder="e.g. Non-binary, Female, Male"
-                    className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-3 py-2 text-sm focus:outline-none"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Enter your name"
+                    className="w-full bg-[#FAF8F5] border border-[#132A1F]/15 rounded-xl px-3.5 py-2.5 text-sm text-[#132A1F] focus:outline-none focus:ring-2 focus:ring-[#FF7A24]/40 font-medium"
+                    required
                   />
                 </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#132A1F] block mb-1">
+                    Authenticated Account Email
+                  </label>
+                  <input
+                    type="email"
+                    value={email || 'account@healno.app'}
+                    disabled
+                    className="w-full bg-[#E8EFE9]/40 border border-[#132A1F]/10 rounded-xl px-3.5 py-2 text-xs text-[#132A1F]/70 select-none cursor-not-allowed"
+                  />
+                  <span className="text-[10px] text-[#132A1F]/50 mt-0.5 block">
+                    Verified through your authenticated session.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#132A1F] block mb-1">
+                    Age Group
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {['18-24', '25-34', '35-44', '45-54', '55-64', '65+'].map((range) => (
+                      <button
+                        key={range}
+                        type="button"
+                        onClick={() => setAgeGroup(range)}
+                        className={`py-2 px-3 text-xs rounded-xl font-bold border transition-all ${
+                          ageGroup === range
+                            ? 'bg-[#FF7A24] text-white border-[#FF7A24] shadow-xs'
+                            : 'bg-[#FAF8F5] text-[#132A1F] border-[#132A1F]/10 hover:border-[#FF7A24]/40'
+                        }`}
+                      >
+                        {range}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#132A1F] block mb-1">
+                    Gender Identity
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {['Female', 'Male', 'Non-binary', 'Prefer not to say'].map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setGender(g)}
+                        className={`py-2 px-3 text-xs rounded-xl font-bold border text-left transition-all ${
+                          gender === g
+                            ? 'bg-[#FF7A24] text-white border-[#FF7A24] shadow-xs'
+                            : 'bg-[#FAF8F5] text-[#132A1F] border-[#132A1F]/10 hover:border-[#FF7A24]/40'
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Step 2: Chronic Conditions */}
+          {/* STEP 2: Health Conditions */}
           {step === 2 && (
             <div className="space-y-4 animate-in fade-in">
-              <div>
-                <h3 className="text-base font-bold text-[#132A1F] font-display">
-                  Chronic Health Conditions & Concerns
-                </h3>
-                <p className="text-xs text-[#132A1F]/70 mt-0.5">
-                  Select any conditions you are managing so Healno understands your context.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {[
-                  'Dysautonomia / POTS',
-                  'Chronic Fatigue Syndrome (ME/CFS)',
-                  'Fibromyalgia',
-                  'Long COVID',
-                  'Ehlers-Danlos / Hypermobility',
-                  'Endometriosis',
-                  'Autoimmune (Lupus, RA, Hashimoto\'s)',
-                  'Chronic Migraines',
-                  'MCAS / Histamine Sensitivity',
-                  'IBS / SIBO',
-                ].map((item) => {
-                  const isSelected = conditions.includes(item);
-                  return (
-                    <button
-                      type="button"
-                      key={item}
-                      onClick={() => toggleArrayItem(conditions, item, setConditions)}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                        isSelected
-                          ? 'bg-[#132A1F] text-white border-[#132A1F]'
-                          : 'bg-white text-[#132A1F]/80 border-[#132A1F]/15'
-                      }`}
-                    >
-                      {item}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Common Symptoms */}
-          {step === 3 && (
-            <div className="space-y-4 animate-in fade-in">
-              <div>
-                <h3 className="text-base font-bold text-[#132A1F] font-display">
-                  Symptoms That Affect You Most
-                </h3>
-                <p className="text-xs text-[#132A1F]/70 mt-0.5">
-                  We will surface quick logging buttons for these in your daily journal.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {[
-                  'Persistent Fatigue',
-                  'Brain Fog & Word Finding',
-                  'Joint & Muscle Pain',
-                  'Unrefreshing Sleep',
-                  'Lightheadedness / Orthostatic',
-                  'Sensory / Light Sensitivity',
-                  'Digestive Discomfort',
-                  'Temperature Fluctuations',
-                ].map((sym) => {
-                  const isSelected = commonSymptoms.includes(sym);
-                  return (
-                    <button
-                      type="button"
-                      key={sym}
-                      onClick={() => toggleArrayItem(commonSymptoms, sym, setCommonSymptoms)}
-                      className={`p-3 rounded-2xl border text-left font-medium transition-all ${
-                        isSelected
-                          ? 'bg-[#E8EFE9] border-[#2D6A4F] text-[#132A1F] font-bold shadow-xs'
-                          : 'bg-white border-[#132A1F]/10 text-[#132A1F]/70'
-                      }`}
-                    >
-                      {sym}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Spoons & Energy Limit */}
-          {step === 4 && (
-            <div className="space-y-4 animate-in fade-in">
-              <div>
-                <h3 className="text-base font-bold text-[#132A1F] font-display">
-                  Daily Energy & Spoon Budget
-                </h3>
-                <p className="text-xs text-[#132A1F]/70 mt-0.5">
-                  How many spoons do you typically start with on an average day? (You can adjust this anytime).
-                </p>
-              </div>
-
-              <div className="bg-[#132A1F] text-white rounded-3xl p-5 text-center space-y-2">
-                <span className="text-xs text-[#B7E4C7] font-semibold uppercase tracking-wider">
-                  Baseline Capacity
-                </span>
-                <div className="text-4xl font-extrabold font-display tabular-nums">
-                  {dailySpoons} Spoons
+              <div className="text-center pb-1">
+                <div className="w-12 h-12 rounded-2xl bg-[#FFF4EB] border border-[#FF7A24]/30 flex items-center justify-center mx-auto mb-2 text-[#FF7A24]">
+                  <Shield className="w-6 h-6" />
                 </div>
-                <p className="text-xs text-white/70">
-                  {dailySpoons <= 8
-                    ? 'Pacing-focused: protects against PEM crashes.'
-                    : dailySpoons <= 14
-                    ? 'Moderate daily capacity with regular rest intervals.'
-                    : 'Higher capacity with gentle pacing breaks.'}
-                </p>
-              </div>
-
-              <input
-                type="range"
-                min="4"
-                max="24"
-                value={dailySpoons}
-                onChange={(e) => setDailySpoons(Number(e.target.value))}
-                className="w-full accent-[#E89D35]"
-              />
-            </div>
-          )}
-
-          {/* Step 5: Nutrition & Allergies */}
-          {step === 5 && (
-            <div className="space-y-4 animate-in fade-in">
-              <div>
-                <h3 className="text-base font-bold text-[#132A1F] font-display">
-                  Dietary Preferences & Allergies
+                <h3 className="text-lg font-bold text-[#132A1F] font-display">
+                  Health Conditions (Optional)
                 </h3>
-                <p className="text-xs text-[#132A1F]/70 mt-0.5">
-                  Helps us recommend low-spoon recipes that are gentle on your digestion.
+                <p className="text-xs text-[#132A1F]/70 mt-0.5 max-w-sm mx-auto">
+                  Select conditions you live with so Healno can support your specific pacing needs. We never verify or assume a diagnosis.
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {[
-                  'Low Histamine',
-                  'Gluten-Free',
-                  'Dairy-Free',
-                  'Low FODMAP',
-                  'Anti-inflammatory',
-                  'Plant-Based',
-                  'High Hydration / Salt',
-                ].map((diet) => {
-                  const isSelected = dietaryPrefs.includes(diet);
-                  return (
-                    <button
-                      type="button"
-                      key={diet}
-                      onClick={() => toggleArrayItem(dietaryPrefs, diet, setDietaryPrefs)}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                        isSelected
-                          ? 'bg-[#132A1F] text-white border-[#132A1F]'
-                          : 'bg-white text-[#132A1F]/80 border-[#132A1F]/15'
-                      }`}
-                    >
-                      {diet}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-[#132A1F] block mb-1">
-                  Medication or Food Allergies (Optional)
-                </label>
+              {/* Search box */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-[#132A1F]/40 absolute left-3 top-3" />
                 <input
                   type="text"
-                  placeholder="e.g. Penicillin, Sulfa, Shellfish, Peanuts"
-                  value={allergies.join(', ')}
-                  onChange={(e) =>
-                    setAllergies(e.target.value.split(',').map((x) => x.trim()))
-                  }
-                  className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs focus:outline-none"
+                  placeholder="Search conditions (e.g. POTS, Migraine, Thyroid...)"
+                  value={conditionsSearch}
+                  onChange={(e) => setConditionsSearch(e.target.value)}
+                  className="w-full bg-white border border-[#132A1F]/15 rounded-xl pl-9 pr-4 py-2.5 text-xs text-[#132A1F] focus:outline-none focus:ring-2 focus:ring-[#FF7A24]/40"
                 />
+              </div>
+
+              {/* Selected Pills */}
+              {selectedConditions.length > 0 && (
+                <div className="bg-[#FFF4EB] p-3 rounded-2xl border border-[#FF7A24]/20 space-y-1.5">
+                  <div className="text-[11px] font-bold text-[#FF7A24]">Selected Conditions ({selectedConditions.length}):</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedConditions.map((item) => (
+                      <span
+                        key={item}
+                        onClick={() => toggleItem(selectedConditions, item, setSelectedConditions)}
+                        className="text-xs bg-[#FF7A24] text-white px-2.5 py-1 rounded-full font-bold flex items-center gap-1 cursor-pointer hover:bg-[#d86214] transition-colors"
+                      >
+                        <span>{item}</span>
+                        <span>✕</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Categorized Options */}
+              <div className="space-y-3 max-h-[36vh] overflow-y-auto pr-1">
+                {conditionCategories.map((cat) => {
+                  const filtered = cat.items.filter((item) =>
+                    item.toLowerCase().includes(conditionsSearch.toLowerCase())
+                  );
+                  if (filtered.length === 0) return null;
+
+                  return (
+                    <div key={cat.name} className="bg-white p-3 rounded-2xl border border-[#132A1F]/10">
+                      <h4 className="text-xs font-bold text-[#132A1F]/70 mb-2 uppercase tracking-wider">
+                        {cat.name}
+                      </h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {filtered.map((item) => {
+                          const isSelected = selectedConditions.includes(item);
+                          return (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => toggleItem(selectedConditions, item, setSelectedConditions)}
+                              className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                                isSelected
+                                  ? 'bg-[#FF7A24] text-white border-[#FF7A24] font-bold shadow-xs'
+                                  : 'bg-[#FAF8F5] text-[#132A1F] border-[#132A1F]/15 hover:border-[#FF7A24]/50 font-medium'
+                              }`}
+                            >
+                              {item} {isSelected && '✓'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Custom condition input */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Add another custom condition..."
+                  value={customConditionInput}
+                  onChange={(e) => setCustomConditionInput(e.target.value)}
+                  className="flex-1 bg-white border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (customConditionInput.trim() && !selectedConditions.includes(customConditionInput.trim())) {
+                      setSelectedConditions((prev) => [...prev, customConditionInput.trim()]);
+                      setCustomConditionInput('');
+                    }
+                  }}
+                  className="px-3 py-2 bg-[#FF7A24] text-white text-xs font-bold rounded-xl shadow-xs"
+                >
+                  + Add
+                </button>
               </div>
             </div>
           )}
 
-          {/* Step 6: Confirmation & Hopeful Illustration */}
-          {step === 6 && (
-            <div className="space-y-4 animate-in fade-in text-center">
-              <div className="rounded-3xl overflow-hidden h-36 bg-[#132A1F] relative shadow-md">
-                <img
-                  src="/src/assets/images/healno_rocket_journey_1792488329975.jpg"
-                  alt="Friendly 3D character exploring on a rocket"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              <div>
-                <h3 className="text-base font-bold text-[#132A1F] font-display">
-                  Your Healno Sanctuary is Ready
+          {/* STEP 3: Symptoms */}
+          {step === 3 && (
+            <div className="space-y-4 animate-in fade-in">
+              <div className="text-center pb-1">
+                <div className="w-12 h-12 rounded-2xl bg-[#FFF4EB] border border-[#FF7A24]/30 flex items-center justify-center mx-auto mb-2 text-[#FF7A24]">
+                  <Activity className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-[#132A1F] font-display">
+                  Frequent Symptoms (Optional)
                 </h3>
-                <p className="text-xs text-[#132A1F]/70 mt-1 max-w-xs mx-auto leading-relaxed">
-                  Remember: your body does not need to be fixed or pushed. Taking rest is a radical, productive act of care.
+                <p className="text-xs text-[#132A1F]/70 mt-0.5 max-w-sm mx-auto">
+                  Choose symptoms you frequently experience. This prepares your personalized symptom diary.
                 </p>
               </div>
 
-              <div className="bg-[#E8EFE9] p-3 rounded-2xl text-xs text-[#132A1F]/80 text-left space-y-1">
-                <div>✓ Daily capacity set to {dailySpoons} Spoons</div>
-                <div>✓ Personalized symptom tracking enabled</div>
-                <div>✓ Gentle AI companion ready to assist</div>
+              {/* Search */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-[#132A1F]/40 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  placeholder="Search symptoms (e.g. Fatigue, Brain fog, Dizziness...)"
+                  value={symptomsSearch}
+                  onChange={(e) => setSymptomsSearch(e.target.value)}
+                  className="w-full bg-white border border-[#132A1F]/15 rounded-xl pl-9 pr-4 py-2.5 text-xs text-[#132A1F] focus:outline-none focus:ring-2 focus:ring-[#FF7A24]/40"
+                />
+              </div>
+
+              {selectedSymptoms.length > 0 && (
+                <div className="bg-[#FFF4EB] p-3 rounded-2xl border border-[#FF7A24]/20 space-y-1.5">
+                  <div className="text-[11px] font-bold text-[#FF7A24]">Selected Symptoms ({selectedSymptoms.length}):</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedSymptoms.map((item) => (
+                      <span
+                        key={item}
+                        onClick={() => toggleItem(selectedSymptoms, item, setSelectedSymptoms)}
+                        className="text-xs bg-[#FF7A24] text-white px-2.5 py-1 rounded-full font-bold flex items-center gap-1 cursor-pointer hover:bg-[#d86214] transition-colors"
+                      >
+                        <span>{item}</span>
+                        <span>✕</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Categorized Options */}
+              <div className="space-y-3 max-h-[36vh] overflow-y-auto pr-1">
+                {symptomCategories.map((cat) => {
+                  const filtered = cat.items.filter((item) =>
+                    item.toLowerCase().includes(symptomsSearch.toLowerCase())
+                  );
+                  if (filtered.length === 0) return null;
+
+                  return (
+                    <div key={cat.name} className="bg-white p-3 rounded-2xl border border-[#132A1F]/10">
+                      <h4 className="text-xs font-bold text-[#132A1F]/70 mb-2 uppercase tracking-wider">
+                        {cat.name}
+                      </h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {filtered.map((item) => {
+                          const isSelected = selectedSymptoms.includes(item);
+                          return (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => toggleItem(selectedSymptoms, item, setSelectedSymptoms)}
+                              className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                                isSelected
+                                  ? 'bg-[#FF7A24] text-white border-[#FF7A24] font-bold shadow-xs'
+                                  : 'bg-[#FAF8F5] text-[#132A1F] border-[#132A1F]/15 hover:border-[#FF7A24]/50 font-medium'
+                              }`}
+                            >
+                              {item} {isSelected && '✓'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Custom symptom input */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Add custom symptom..."
+                  value={customSymptomInput}
+                  onChange={(e) => setCustomSymptomInput(e.target.value)}
+                  className="flex-1 bg-white border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (customSymptomInput.trim() && !selectedSymptoms.includes(customSymptomInput.trim())) {
+                      setSelectedSymptoms((prev) => [...prev, customSymptomInput.trim()]);
+                      setCustomSymptomInput('');
+                    }
+                  }}
+                  className="px-3 py-2 bg-[#FF7A24] text-white text-xs font-bold rounded-xl shadow-xs"
+                >
+                  + Add
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: Medicines & Supplements */}
+          {step === 4 && (
+            <div className="space-y-4 animate-in fade-in">
+              <div className="text-center pb-1">
+                <div className="w-12 h-12 rounded-2xl bg-[#FFF4EB] border border-[#FF7A24]/30 flex items-center justify-center mx-auto mb-2 text-[#FF7A24]">
+                  <Pill className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-[#132A1F] font-display">
+                  Medicines & Supplements (Optional)
+                </h3>
+                <p className="text-xs text-[#132A1F]/70 mt-0.5 max-w-sm mx-auto">
+                  Keep track of what you take. We never suggest prescription changes or share this without consent.
+                </p>
+              </div>
+
+              {/* Added Meds List */}
+              {medsList.length > 0 ? (
+                <div className="space-y-2">
+                  {medsList.map((m) => (
+                    <div
+                      key={m.id}
+                      className="bg-white p-3 rounded-2xl border border-[#132A1F]/10 flex items-center justify-between"
+                    >
+                      <div>
+                        <div className="text-xs font-bold text-[#132A1F]">{m.name}</div>
+                        <div className="text-[11px] text-[#132A1F]/60">
+                          {m.dosage} · {m.frequency} · <span className="text-[#FF7A24]">{m.category}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMed(m.id)}
+                        className="text-red-500 hover:text-red-700 p-1 rounded-md"
+                        title="Remove"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-[#FAF8F5] border border-dashed border-[#132A1F]/20 rounded-2xl p-4 text-center">
+                  <p className="text-xs text-[#132A1F]/60">No medicines or supplements added yet.</p>
+                </div>
+              )}
+
+              {/* Add form toggle */}
+              {!showAddMedForm ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAddMedForm(true)}
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#FFF4EB] border border-[#FF7A24]/30 text-[#FF7A24] font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#ffe8d6] transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Add a Medicine or Supplement</span>
+                </button>
+              ) : (
+                <form onSubmit={handleAddMed} className="bg-white p-4 rounded-2xl border border-[#FF7A24]/30 space-y-3">
+                  <h4 className="text-xs font-bold text-[#132A1F]">Add Medicine / Supplement</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#132A1F] block mb-0.5">Name *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. CoQ10, Electrolytes"
+                        value={newMedName}
+                        onChange={(e) => setNewMedName(e.target.value)}
+                        className="w-full bg-[#FAF8F5] border border-[#132A1F]/15 rounded-lg px-2.5 py-1.5 text-xs"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#132A1F] block mb-0.5">Dosage</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 100mg, 1 tablet"
+                        value={newMedDosage}
+                        onChange={(e) => setNewMedDosage(e.target.value)}
+                        className="w-full bg-[#FAF8F5] border border-[#132A1F]/15 rounded-lg px-2.5 py-1.5 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#132A1F] block mb-0.5">Category</label>
+                      <select
+                        value={newMedCategory}
+                        onChange={(e) => setNewMedCategory(e.target.value)}
+                        className="w-full bg-[#FAF8F5] border border-[#132A1F]/15 rounded-lg px-2 py-1.5 text-xs"
+                      >
+                        {medicationCategories.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-[#132A1F] block mb-0.5">Frequency</label>
+                      <select
+                        value={newMedFrequency}
+                        onChange={(e) => setNewMedFrequency(e.target.value)}
+                        className="w-full bg-[#FAF8F5] border border-[#132A1F]/15 rounded-lg px-2 py-1.5 text-xs"
+                      >
+                        <option value="Daily">Daily</option>
+                        <option value="Twice daily">Twice daily</option>
+                        <option value="Morning">Morning</option>
+                        <option value="Bedtime">Bedtime</option>
+                        <option value="As needed">As needed</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMedForm(false)}
+                      className="px-3 py-1.5 text-xs text-[#132A1F]/60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-1.5 bg-[#FF7A24] text-white text-xs font-bold rounded-xl shadow-xs"
+                    >
+                      Save Item
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
+
+          {/* STEP 5: Daily-Life Impact */}
+          {step === 5 && (
+            <div className="space-y-4 animate-in fade-in">
+              <div className="text-center pb-1">
+                <div className="w-12 h-12 rounded-2xl bg-[#FFF4EB] border border-[#FF7A24]/30 flex items-center justify-center mx-auto mb-2 text-[#FF7A24]">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-[#132A1F] font-display">
+                  Daily-Life Impact (Optional)
+                </h3>
+                <p className="text-xs text-[#132A1F]/70 mt-0.5 max-w-sm mx-auto">
+                  Understanding what affects you most helps personalize your energy capacity and pacing recommendations.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#132A1F] block">
+                  Which areas of daily life are most impacted? (Select all that apply)
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {impactList.map((item) => {
+                    const isSelected = impactAreas.includes(item.id);
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => toggleItem(impactAreas, item.id, setImpactAreas)}
+                        className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-start gap-2.5 ${
+                          isSelected
+                            ? 'bg-[#FFF4EB] border-[#FF7A24] shadow-xs'
+                            : 'bg-white border-[#132A1F]/10 hover:border-[#132A1F]/30'
+                        }`}
+                      >
+                        <span className="text-xl shrink-0 mt-0.5">{item.icon}</span>
+                        <div className="min-w-0">
+                          <div className={`text-xs font-bold ${isSelected ? 'text-[#FF7A24]' : 'text-[#132A1F]'}`}>
+                            {item.label}
+                          </div>
+                          <div className="text-[10px] text-[#132A1F]/60 leading-tight mt-0.5">
+                            {item.desc}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="bg-white p-3.5 rounded-2xl border border-[#132A1F]/10 space-y-2">
+                <label className="text-xs font-bold text-[#132A1F] block">
+                  How do your symptoms typically behave over time?
+                </label>
+                <div className="space-y-1.5">
+                  {[
+                    'Fluctuates depending on activity and rest',
+                    'Steady baseline with sudden flare-ups',
+                    'Triggered by stress, weather, or exertion',
+                    'Gradually improving or still under investigation',
+                  ].map((opt) => (
+                    <label key={opt} className="flex items-center gap-2 text-xs text-[#132A1F] cursor-pointer">
+                      <input
+                        type="radio"
+                        name="symptomBehavior"
+                        checked={symptomBehavior === opt}
+                        onChange={() => setSymptomBehavior(opt)}
+                        className="accent-[#FF7A24]"
+                      />
+                      <span>{opt}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 6: Healthcare Preferences */}
+          {step === 6 && (
+            <div className="space-y-4 animate-in fade-in">
+              <div className="text-center pb-1">
+                <div className="w-12 h-12 rounded-2xl bg-[#FFF4EB] border border-[#FF7A24]/30 flex items-center justify-center mx-auto mb-2 text-[#FF7A24]">
+                  <Shield className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-[#132A1F] font-display">
+                  Healthcare & Privacy Preferences
+                </h3>
+                <p className="text-xs text-[#132A1F]/70 mt-0.5 max-w-sm mx-auto">
+                  You stay in full control. Your health data is never shared with providers, caregivers, or third parties without explicit authorization.
+                </p>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-[#132A1F]/10 space-y-2.5">
+                <label className="text-xs font-bold text-[#132A1F] block">
+                  How do you plan to use Healno?
+                </label>
+                <div className="space-y-2">
+                  {[
+                    'Personal reflection & tracking only',
+                    'Prepare clinical summary notes before doctor appointments',
+                    'Share exported symptom reports with my healthcare provider',
+                    'Manage my daily energy, tasks, and pacing',
+                  ].map((pref) => (
+                    <label
+                      key={pref}
+                      className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                        sharingPreference === pref
+                          ? 'bg-[#FFF4EB] border-[#FF7A24]'
+                          : 'bg-[#FAF8F5] border-[#132A1F]/10'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="sharingPref"
+                        checked={sharingPreference === pref}
+                        onChange={() => setSharingPreference(pref)}
+                        className="accent-[#FF7A24] mt-0.5"
+                      />
+                      <span className="text-xs text-[#132A1F] font-medium">{pref}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-[#132A1F]/10 space-y-2">
+                <label className="text-xs font-bold text-[#132A1F] block">
+                  How do you currently track health & symptoms?
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    'Paper journal / diary',
+                    'Notes app on phone',
+                    'Wearables (Apple Watch/Garmin)',
+                    'Other health apps',
+                    'Spreadsheets',
+                    'In my head / memory',
+                  ].map((method) => {
+                    const isSelected = trackingMethods.includes(method);
+                    return (
+                      <button
+                        key={method}
+                        type="button"
+                        onClick={() => toggleItem(trackingMethods, method, setTrackingMethods)}
+                        className={`text-xs py-2 px-3 rounded-xl border text-left font-medium transition-all ${
+                          isSelected
+                            ? 'bg-[#FF7A24] text-white border-[#FF7A24] font-bold shadow-xs'
+                            : 'bg-[#FAF8F5] text-[#132A1F] border-[#132A1F]/10 hover:border-[#FF7A24]/40'
+                        }`}
+                      >
+                        {method} {isSelected && '✓'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 7: Review & Confirmation */}
+          {step === 7 && (
+            <div className="space-y-4 animate-in fade-in">
+              <div className="text-center pb-1">
+                <div className="w-12 h-12 rounded-2xl bg-[#D8F3DC] border border-[#52B788]/40 flex items-center justify-center mx-auto mb-2 text-[#2D6A4F]">
+                  <CheckCircle2 className="w-7 h-7" />
+                </div>
+                <h3 className="text-xl font-bold text-[#132A1F] font-display">
+                  Review Your Real Health Profile
+                </h3>
+                <p className="text-xs text-[#132A1F]/70 mt-0.5 max-w-sm mx-auto">
+                  Everything here reflects only what you entered. You can edit any section below or later in Profile.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {/* Profile review card */}
+                <div className="bg-white p-3.5 rounded-2xl border border-[#132A1F]/10 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF7A24]">Profile</span>
+                    <div className="text-sm font-bold text-[#132A1F]">{name || 'Health Friend'}</div>
+                    <div className="text-xs text-[#132A1F]/60">Age: {ageGroup} · {gender}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="text-xs text-[#FF7A24] font-bold hover:underline"
+                  >
+                    Edit
+                  </button>
+                </div>
+
+                {/* Conditions review card */}
+                <div className="bg-white p-3.5 rounded-2xl border border-[#132A1F]/10 flex items-start justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF7A24]">Conditions</span>
+                    <div className="text-xs text-[#132A1F] font-semibold mt-0.5">
+                      {selectedConditions.length > 0 ? selectedConditions.join(', ') : 'None added'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="text-xs text-[#FF7A24] font-bold hover:underline"
+                  >
+                    Edit
+                  </button>
+                </div>
+
+                {/* Symptoms review card */}
+                <div className="bg-white p-3.5 rounded-2xl border border-[#132A1F]/10 flex items-start justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF7A24]">Frequent Symptoms</span>
+                    <div className="text-xs text-[#132A1F] font-semibold mt-0.5">
+                      {selectedSymptoms.length > 0 ? selectedSymptoms.join(', ') : 'None added'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep(3)}
+                    className="text-xs text-[#FF7A24] font-bold hover:underline"
+                  >
+                    Edit
+                  </button>
+                </div>
+
+                {/* Medicines review card */}
+                <div className="bg-white p-3.5 rounded-2xl border border-[#132A1F]/10 flex items-start justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF7A24]">Medicines & Routine</span>
+                    <div className="text-xs text-[#132A1F] font-semibold mt-0.5">
+                      {medsList.length > 0 ? medsList.map((m) => `${m.name} (${m.dosage})`).join(', ') : 'None added'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep(4)}
+                    className="text-xs text-[#FF7A24] font-bold hover:underline"
+                  >
+                    Edit
+                  </button>
+                </div>
+
+                {/* Impact & Preference */}
+                <div className="bg-white p-3.5 rounded-2xl border border-[#132A1F]/10 flex items-start justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF7A24]">Preferences</span>
+                    <div className="text-xs text-[#132A1F] font-semibold mt-0.5">
+                      {sharingPreference}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep(6)}
+                    className="text-xs text-[#FF7A24] font-bold hover:underline"
+                  >
+                    Edit
+                  </button>
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Bottom Navigation Buttons */}
-        <div className="p-4 bg-white border-t border-[#132A1F]/10 flex items-center justify-between">
+        {/* Bottom Actions Bar */}
+        <div className="p-4 bg-white border-t border-[#132A1F]/10 flex items-center justify-between shrink-0">
           {step > 1 ? (
             <button
-              onClick={() => setStep(step - 1)}
-              className="py-2.5 px-4 rounded-xl border border-[#132A1F]/15 text-xs font-semibold text-[#132A1F] flex items-center gap-1 hover:bg-[#F8F6F0]"
+              type="button"
+              onClick={handleBack}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-[#132A1F]/20 text-xs font-bold text-[#132A1F] hover:bg-[#FAF8F5] transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
               <span>Back</span>
@@ -376,19 +1011,21 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
           {step < totalSteps ? (
             <button
-              onClick={() => setStep(step + 1)}
-              className="py-2.5 px-6 rounded-full bg-[#132A1F] hover:bg-[#2D6A4F] text-white text-xs font-bold font-display shadow-xs flex items-center gap-1.5 transition-colors"
+              type="button"
+              onClick={handleNext}
+              className="flex items-center gap-1.5 px-6 py-2.5 rounded-full bg-[#FF7A24] hover:bg-[#d86214] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/30 active:scale-95 transition-all"
             >
               <span>Continue</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
             <button
-              onClick={handleFinish}
-              className="py-2.5 px-6 rounded-full bg-[#E89D35] hover:bg-[#d88d25] text-white text-xs font-bold font-display shadow-md flex items-center gap-1.5 transition-colors"
+              type="button"
+              onClick={handleCompleteAll}
+              className="flex items-center gap-2 px-7 py-3 rounded-full bg-[#FF7A24] hover:bg-[#d86214] text-white text-sm font-bold shadow-lg shadow-[#FF7A24]/35 active:scale-95 transition-all font-display"
             >
-              <span>Enter Healno</span>
-              <Check className="w-4 h-4" />
+              <Check className="w-4 h-4 stroke-[3]" />
+              <span>Confirm & Activate Dashboard</span>
             </button>
           )}
         </div>

@@ -66,7 +66,6 @@ export const MealsScreen: React.FC<MealsScreenProps> = ({
         lowEffortAlternative: generated.lowEffortAlternative || 'Warm pre-made broth with plain crackers.',
         nutritionNotes: generated.nutritionNotes || 'Gentle on digestion, hydrating electrolytes.',
         storageGuidance: 'Store in refrigerator up to 2 days.',
-        imageUrl: 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=500&q=80',
       };
 
       onSaveMeal(newRecipe);

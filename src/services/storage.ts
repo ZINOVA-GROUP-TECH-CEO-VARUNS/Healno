@@ -13,6 +13,8 @@ import {
   Achievement,
   MealRecipe,
   JournalEntry,
+  ActivityEntry,
+  JournalTask,
 } from '../types';
 
 const STORAGE_KEYS = {
@@ -20,6 +22,8 @@ const STORAGE_KEYS = {
   SYMPTOMS: 'healno_symptoms',
   EMOTIONS: 'healno_emotions',
   JOURNAL: 'healno_journal',
+  JOURNAL_TASKS: 'healno_journal_tasks',
+  ACTIVITIES: 'healno_activities',
   MEDICATIONS: 'healno_medications',
   MED_EVENTS: 'healno_med_events',
   PACING_TASKS: 'healno_pacing_tasks',
@@ -29,24 +33,21 @@ const STORAGE_KEYS = {
   COMMUNITY_POSTS: 'healno_community_posts',
   ACHIEVEMENTS: 'healno_achievements',
   MEALS: 'healno_meals',
+  ONBOARDING_PROGRESS: 'healno_onboarding_progress',
 };
 
-// Seed initial profile
+// Initial empty user profile (never fabricated with fake data)
 export const defaultProfile: UserProfile = {
-  id: 'user_01',
-  name: 'Jose Maria',
-  email: 'jose.maria@healno.app',
-  phone: '+1 (555) 234-5678',
-  dob: '1994-06-14',
-  age: 32,
-  gender: 'Non-binary',
-  conditions: ['Dysautonomia / POTS', 'Chronic Fatigue Syndrome', 'Mild Sensory Sensitivity'],
-  commonSymptoms: ['Fatigue', 'Brain Fog', 'Joint Discomfort', 'Lightheadedness'],
-  currentMedicationsSummary: 'Fludrocortisone 0.1mg, CoQ10 200mg, Electrolytes daily',
+  id: 'user_local',
+  name: '',
+  email: '',
+  conditions: [],
+  commonSymptoms: [],
+  currentMedicationsSummary: '',
   dailySpoonsCapacity: 12,
-  dietaryPreferences: ['Low Histamine', 'Gluten-Conscious', 'High Hydration'],
-  allergies: ['Penicillin', 'Sulfa'],
-  dailyGoals: ['Protect morning energy', 'Take pacing rest breaks', 'Stay hydrated'],
+  dietaryPreferences: [],
+  allergies: [],
+  dailyGoals: [],
   notificationPrefs: {
     medications: true,
     dailyCheckin: true,
@@ -60,12 +61,11 @@ export const defaultProfile: UserProfile = {
     highContrast: false,
     largeFont: false,
   },
-  streakDays: 5,
-  xp: 420,
-  badges: ['badge_pacing_start', 'badge_gentle_morning', 'badge_first_week'],
-  isOnboarded: true,
-  isAuthenticated: true,
-  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+  streakDays: 0,
+  xp: 0,
+  badges: [],
+  isOnboarded: false,
+  isAuthenticated: false,
 };
 
 // Seed initial emotions (matches the reference image 420 score and 4 core emotions: Happy 48%, Sad 33%, Calm 27%, Anxious 40%)
@@ -96,334 +96,16 @@ export const defaultEmotions: EmotionScore[] = [
   },
 ];
 
-export const defaultJournalEntries: JournalEntry[] = [
-  {
-    id: 'entry_1',
-    date: new Date().toISOString().split('T')[0],
-    time: '08:30',
-    title: 'Morning Reflections & Protecting My Spoons',
-    content: `Woke up feeling that familiar heavy fog, but instead of forcing myself out of bed in a rush, I took 20 minutes lying horizontal with slow belly breaths.
+export const defaultJournalEntries: JournalEntry[] = [];
+export const defaultJournalTasks: JournalTask[] = [];
+export const defaultActivities: ActivityEntry[] = [];
 
-Noticing that my wrists feel softer today after taking the magnesium glycinate last night. Today my primary intention is simple: do not push through the 2:00 PM dip. The dishes and laundry can wait until tomorrow. My peace and neurological calm come first.`,
-    moodRating: 'Reflective',
-    energyRating: 5,
-    tags: ['Morning Reflection', 'Pacing Intention', 'Self-Compassion'],
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'entry_2',
-    date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-    time: '16:45',
-    title: 'A Gentle Afternoon Victory',
-    content: `Usually after an errand run I crash and beat myself up. Today I did something different: I sat on the kitchen stool while making tea, drank my electrolytes slowly, and took an unhurried rest break with eyes closed.
-
-I didn't crash. Stopping before the threshold really does change the outcome. Feeling genuinely grateful for this gentle shift.`,
-    moodRating: 'Grateful',
-    energyRating: 6,
-    tags: ['Pacing Win', 'Electrolytes', 'Gratitude'],
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-  },
-  {
-    id: 'entry_3',
-    date: new Date(Date.now() - 86400000 * 2).toISOString().split('T')[0],
-    time: '20:15',
-    title: 'Evening Quiet & Breathwork',
-    content: `A quiet sensory evening. Dimmed all overhead lamps by 7:30 PM. Listened to the Healno wind-down guide. It's okay that I only completed two tasks today; my body is doing restorative work around the clock.`,
-    moodRating: 'Peaceful',
-    energyRating: 4,
-    tags: ['Sensory Rest', 'Wind Down', 'Pacing'],
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-];
-
-export const defaultSymptoms: SymptomLog[] = [
-  {
-    id: 'sym_1',
-    date: new Date().toISOString().split('T')[0],
-    time: '09:30',
-    category: 'fatigue',
-    name: 'Persistent Fatigue',
-    intensity: 6,
-    notes: 'Felt heavy after waking up, took an extra 20 min lying flat.',
-    tags: ['Morning', 'Unrefreshing Sleep'],
-    triggers: ['Poor sleep latency'],
-    restPeriods: '20 min horizontal rest',
-  },
-  {
-    id: 'sym_2',
-    date: new Date().toISOString().split('T')[0],
-    time: '11:15',
-    category: 'brain_fog',
-    name: 'Brain Fog',
-    intensity: 4,
-    notes: 'Mild word-finding difficulty during reading.',
-    tags: ['Reading', 'Cognitive'],
-    triggers: ['Bright screen'],
-    restPeriods: '15 min audio-only pause',
-  },
-  {
-    id: 'sym_3',
-    date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-    time: '15:00',
-    category: 'pain',
-    name: 'Joint Discomfort',
-    intensity: 5,
-    notes: 'Ache across upper back and wrists.',
-    tags: ['Post-Desk Work'],
-    triggers: ['Typing session'],
-    restPeriods: 'Warm compress + reclined rest',
-  },
-  {
-    id: 'sym_4',
-    date: new Date(Date.now() - 86400000 * 3).toISOString().split('T')[0],
-    time: '18:00',
-    category: 'fatigue',
-    name: 'Post-Exertional Fatigue',
-    intensity: 7,
-    notes: 'Crashed after errand run.',
-    tags: ['Overexertion', 'Errands'],
-    triggers: ['Standing in line'],
-    restPeriods: 'Full quiet rest',
-  },
-];
-
-export const defaultMedications: Medication[] = [
-  {
-    id: 'med_1',
-    name: 'Fludrocortisone',
-    dosage: '0.1 mg',
-    scheduleTimes: ['08:00'],
-    timeSlot: 'Morning',
-    instructions: 'Take with full glass of water and electrolytes after breakfast.',
-    isAsNeeded: false,
-    refillDate: '2026-11-15',
-    currentSupply: 24,
-    refillReminder: true,
-    prescriber: 'Dr. Evelyn Vance (Autonomic Neurology)',
-    category: 'Prescription',
-  },
-  {
-    id: 'med_2',
-    name: 'Coenzyme Q10 (Ubiquinol)',
-    dosage: '200 mg',
-    scheduleTimes: ['08:00'],
-    timeSlot: 'Morning',
-    instructions: 'Take with morning meal containing healthy fats for cellular support.',
-    isAsNeeded: false,
-    currentSupply: 45,
-    refillReminder: false,
-    category: 'Supplement',
-  },
-  {
-    id: 'med_3',
-    name: 'Magnesium Glycinate',
-    dosage: '300 mg',
-    scheduleTimes: ['21:30'],
-    timeSlot: 'Bedtime',
-    instructions: 'Take 30 minutes before sleep to support muscular relaxation.',
-    isAsNeeded: false,
-    refillDate: '2026-11-01',
-    currentSupply: 12,
-    refillReminder: true,
-    category: 'Supplement',
-  },
-  {
-    id: 'med_4',
-    name: 'Oral Rehydration Salts',
-    dosage: '1 Packet in 500ml',
-    scheduleTimes: ['14:00'],
-    timeSlot: 'Afternoon',
-    instructions: 'Sip slowly when feeling orthostatic or lightheaded.',
-    isAsNeeded: true,
-    currentSupply: 18,
-    category: 'OTC',
-  },
-];
-
-export const defaultMedEvents: MedicationEvent[] = [
-  {
-    id: 'me_1',
-    medicationId: 'med_1',
-    date: new Date().toISOString().split('T')[0],
-    timeSlot: 'Morning',
-    status: 'taken',
-    recordedAt: '08:15',
-  },
-  {
-    id: 'me_2',
-    medicationId: 'med_2',
-    date: new Date().toISOString().split('T')[0],
-    timeSlot: 'Morning',
-    status: 'taken',
-    recordedAt: '08:15',
-  },
-  {
-    id: 'me_3',
-    medicationId: 'med_4',
-    date: new Date().toISOString().split('T')[0],
-    timeSlot: 'Afternoon',
-    status: 'pending',
-  },
-  {
-    id: 'me_4',
-    medicationId: 'med_3',
-    date: new Date().toISOString().split('T')[0],
-    timeSlot: 'Bedtime',
-    status: 'pending',
-  },
-];
-
-export const defaultPacingTasks: PacingTask[] = [
-  {
-    id: 'task_1',
-    title: 'Mindful Morning Reflection',
-    category: 'personal',
-    spoonCost: 1,
-    completed: true,
-    date: new Date().toISOString().split('T')[0],
-    time: '08:00',
-    notes: 'Journaled 3 gentle thoughts',
-  },
-  {
-    id: 'task_2',
-    title: 'Hydration & Morning Electrolytes',
-    category: 'care',
-    spoonCost: 1,
-    completed: true,
-    date: new Date().toISOString().split('T')[0],
-    time: '08:30',
-  },
-  {
-    id: 'task_3',
-    title: 'Gentle Pacing Rest Break',
-    category: 'rest',
-    spoonCost: -1, // Restores 1 spoon!
-    isRestorative: true,
-    completed: true,
-    date: new Date().toISOString().split('T')[0],
-    time: '10:00',
-    notes: '15 minutes quiet room lying flat',
-  },
-  {
-    id: 'task_4',
-    title: 'Review Blood Pressure & Heart Rate Log',
-    category: 'care',
-    spoonCost: 1,
-    completed: false,
-    date: new Date().toISOString().split('T')[0],
-    time: '13:00',
-  },
-  {
-    id: 'task_5',
-    title: 'Prepare Questions for Dr. Vance',
-    category: 'care',
-    spoonCost: 2,
-    completed: false,
-    date: new Date().toISOString().split('T')[0],
-    time: '15:30',
-  },
-  {
-    id: 'task_6',
-    title: 'Evening Dim-Light Wind Down',
-    category: 'rest',
-    spoonCost: -1,
-    isRestorative: true,
-    completed: false,
-    date: new Date().toISOString().split('T')[0],
-    time: '20:30',
-  },
-];
-
-export const defaultDocuments: MedicalDocument[] = [
-  {
-    id: 'doc_1',
-    title: 'Comprehensive Metabolic & Iron Panel',
-    documentType: 'Lab Report',
-    provider: 'Pacific Diagnostics Laboratory',
-    date: '2026-10-05',
-    fileName: 'metabolic_iron_panel_oct2026.pdf',
-    fileSize: '1.4 MB',
-    keyFindings: [
-      'Serum Ferritin: 19 ng/mL (Reference: 15 - 150 ng/mL) — Borderline low',
-      'Vitamin D (25-OH): 28 ng/mL (Reference: 30 - 100 ng/mL) — Mild insufficiency',
-      'Sodium: 141 mEq/L (Normal)',
-      'Potassium: 4.2 mEq/L (Normal)',
-    ],
-    plainLanguageSummary: 'Your metabolic values and electrolytes look balanced. Your iron reserve (ferritin) and vitamin D are near the low threshold, which may be tied to daytime fatigue.',
-    suggestedDoctorQuestions: [
-      'Could my low-normal ferritin be contributing to my post-exertional fatigue?',
-      'Do you suggest starting a gentle, non-constipating iron or vitamin D3 supplement?',
-      'Should we retest these markers in 3 months?',
-    ],
-    unverified: false,
-    connectedSymptoms: ['Fatigue', 'Brain Fog'],
-    userNotes: 'Discussed briefly via patient portal; to review in person at next check-in.',
-  },
-  {
-    id: 'doc_2',
-    title: 'Autonomic Tilt Table Summary Note',
-    documentType: 'Clinic Note',
-    provider: 'St. Jude Neurological Specialty Clinic',
-    date: '2026-08-12',
-    fileName: 'tilt_table_autonomic_eval.pdf',
-    fileSize: '840 KB',
-    keyFindings: [
-      'Resting Supine HR: 68 bpm; Upright 10-min HR: 112 bpm (+44 bpm increase)',
-      'Blood pressure remained stable without significant orthostatic drop',
-      'Consistent with postural orthostatic tachycardia criteria',
-    ],
-    plainLanguageSummary: 'The test documented an upright heart rate increase exceeding 30 beats per minute without a blood pressure drop, meeting the standard criteria for POTS.',
-    suggestedDoctorQuestions: [
-      'What are our optimal salt and fluid intake targets based on these results?',
-      'Is compression wear (waist-high vs knee-high) recommended for my symptom profile?',
-    ],
-    unverified: false,
-    connectedSymptoms: ['Lightheadedness', 'Fatigue'],
-  },
-];
-
-export const defaultAppointments: Appointment[] = [
-  {
-    id: 'apt_1',
-    provider: 'Dr. Evelyn Vance',
-    specialty: 'Autonomic Neurology',
-    location: 'Northwestern Neuro Center, Suite 410',
-    date: '2026-10-28',
-    time: '14:00',
-    purpose: '6-Month POTS & Energy Pacing Follow-up',
-    reminderSet: true,
-    completed: false,
-    doctorQuestions: [
-      'Should we adjust the timing of fludrocortisone for morning peaks?',
-      'Can we review my borderline ferritin results from the October panel?',
-      'What are gentle guidelines for reconditioning during flare-ups?',
-    ],
-    talkingPoints: [
-      'Energy has been around 6-7 spoons average, dipping on days with errands.',
-      'Hydration routine has reduced afternoon lightheaded episodes.',
-      'Brain fog remains noticeable when reading for more than 45 minutes.',
-    ],
-    clinicalNotes: 'Bring updated symptom export and medication checklist.',
-  },
-  {
-    id: 'apt_2',
-    provider: 'Dr. Marcus Chen',
-    specialty: 'Integrative Primary Care',
-    location: 'City Green Health Clinic',
-    date: '2026-11-12',
-    time: '10:30',
-    purpose: 'Routine Labs & Vitamin D Review',
-    reminderSet: true,
-    completed: false,
-    doctorQuestions: [
-      'Is vitamin D3 + K2 appropriate for winter months?',
-      'Check fasting blood sugar and lipid trends.',
-    ],
-    talkingPoints: [
-      'Daily joint comfort has improved with magnesium glycinate at night.',
-    ],
-  },
-];
+export const defaultSymptoms: SymptomLog[] = [];
+export const defaultMedications: Medication[] = [];
+export const defaultMedEvents: MedicationEvent[] = [];
+export const defaultPacingTasks: PacingTask[] = [];
+export const defaultDocuments: MedicalDocument[] = [];
+export const defaultAppointments: Appointment[] = [];
 
 export const defaultCareProviders: CareProvider[] = [
   {
@@ -596,7 +278,6 @@ export const defaultCommunityPosts: CommunityPost[] = [
     id: 'post_1',
     authorName: 'Rowan K.',
     isAnonymous: false,
-    authorAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=120&q=80',
     timeAgo: '2h ago',
     topic: 'pacing',
     title: 'Reminder: Giving yourself permission to rest without earning it first',
@@ -629,7 +310,6 @@ export const defaultCommunityPosts: CommunityPost[] = [
     id: 'post_2',
     authorName: 'Alex (POTS & ME)',
     isAnonymous: false,
-    authorAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80',
     timeAgo: '5h ago',
     topic: 'coping',
     title: 'My top 3 low-spoon kitchen hacks for dinner when standing is hard',
@@ -723,7 +403,6 @@ export const defaultMeals: MealRecipe[] = [
   {
     id: 'meal_1',
     name: '10-Minute Soothing Ginger Miso Broth & Rice',
-    imageUrl: 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=500&q=80',
     spoonCost: 1,
     prepTimeMinutes: 10,
     difficulty: 'Low Effort',
@@ -749,7 +428,6 @@ export const defaultMeals: MealRecipe[] = [
   {
     id: 'meal_2',
     name: 'Gentle Quinoa & Roasted Sweet Potato Nourish Bowl',
-    imageUrl: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=500&q=80',
     spoonCost: 2,
     prepTimeMinutes: 20,
     difficulty: 'Moderate',
@@ -773,7 +451,6 @@ export const defaultMeals: MealRecipe[] = [
   {
     id: 'meal_3',
     name: 'Warm Turmeric Golden Oat Porridge with Blueberries',
-    imageUrl: 'https://images.unsplash.com/photo-1584776296944-ab6fb57b0bdd?auto=format&fit=crop&w=500&q=80',
     spoonCost: 1,
     prepTimeMinutes: 8,
     difficulty: 'Low Effort',
@@ -1075,6 +752,74 @@ export const storageService = {
   deleteJournalEntry: (id: string): void => {
     const list = storageService.getJournalEntries().filter(e => e.id !== id);
     localStorage.setItem(STORAGE_KEYS.JOURNAL, JSON.stringify(list));
+  },
+
+  // Personal Tasks in My Journal
+  getJournalTasks: (): JournalTask[] => {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.JOURNAL_TASKS);
+      return data ? JSON.parse(data) : defaultJournalTasks;
+    } catch {
+      return defaultJournalTasks;
+    }
+  },
+  saveJournalTask: (task: JournalTask): void => {
+    const list = storageService.getJournalTasks();
+    const idx = list.findIndex(t => t.id === task.id);
+    if (idx >= 0) {
+      list[idx] = task;
+    } else {
+      list.unshift(task);
+    }
+    localStorage.setItem(STORAGE_KEYS.JOURNAL_TASKS, JSON.stringify(list));
+  },
+  toggleJournalTask: (id: string): void => {
+    const list = storageService.getJournalTasks();
+    const task = list.find(t => t.id === id);
+    if (task) {
+      task.completed = !task.completed;
+      task.completedAt = task.completed ? new Date().toISOString() : undefined;
+      localStorage.setItem(STORAGE_KEYS.JOURNAL_TASKS, JSON.stringify(list));
+    }
+  },
+  deleteJournalTask: (id: string): void => {
+    const list = storageService.getJournalTasks().filter(t => t.id !== id);
+    localStorage.setItem(STORAGE_KEYS.JOURNAL_TASKS, JSON.stringify(list));
+  },
+
+  // Daily Activity Tracker
+  getActivities: (): ActivityEntry[] => {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.ACTIVITIES);
+      return data ? JSON.parse(data) : defaultActivities;
+    } catch {
+      return defaultActivities;
+    }
+  },
+  addActivity: (entry: ActivityEntry): void => {
+    const list = storageService.getActivities();
+    list.unshift(entry);
+    localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(list));
+  },
+  deleteActivity: (id: string): void => {
+    const list = storageService.getActivities().filter(a => a.id !== id);
+    localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(list));
+  },
+
+  // Onboarding progress persistence
+  getOnboardingProgress: (): any => {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.ONBOARDING_PROGRESS);
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  },
+  saveOnboardingProgress: (data: any): void => {
+    localStorage.setItem(STORAGE_KEYS.ONBOARDING_PROGRESS, JSON.stringify(data));
+  },
+  clearOnboardingProgress: (): void => {
+    localStorage.removeItem(STORAGE_KEYS.ONBOARDING_PROGRESS);
   },
 
   // Calculate real streak from persisted activity records using local user dates

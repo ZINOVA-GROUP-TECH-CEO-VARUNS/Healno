@@ -106,6 +106,28 @@ export interface PacingTask {
   notes?: string;
 }
 
+export interface JournalTask {
+  id: string;
+  title: string;
+  description?: string;
+  date: string;
+  time?: string;
+  priority?: 'low' | 'medium' | 'high';
+  completed: boolean;
+  completedAt?: string;
+}
+
+export interface ActivityEntry {
+  id: string;
+  category: 'personal_care' | 'household' | 'groceries' | 'food_prep' | 'work_study' | 'movement' | 'custom';
+  activityName: string;
+  date: string;
+  time?: string;
+  durationMinutes?: number;
+  notes?: string;
+  createdAt?: string;
+}
+
 export interface MedicalDocument {
   id: string;
   title: string;

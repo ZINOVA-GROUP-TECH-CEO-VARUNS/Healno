@@ -1,0 +1,1583 @@
+MASTER PROMPT — HEALNO HEALTH APP REDESIGN, ONBOARDING FIX, AND FULL-CODEBASE AUDIT
+Project Objective
+
+Act as a senior full-stack engineer, UI/UX designer, healthcare product architect, database engineer, security specialist, and QA engineer.
+
+Inspect, repair, and improve my existing Healno health and wellness application. Implement all requirements below directly in the existing codebase.
+
+The goal is to build a modern, premium, interactive, personalized health companion that helps users understand their symptoms, maintain a personal health diary, learn about health topics, manage daily activities, and connect with a supportive community.
+
+This is an implementation task, not a design-only task. Inspect the existing frontend, backend, authentication system, database schema, APIs, and routing before making changes. Preserve working features wherever possible, fix broken functionality, and verify the final implementation.
+
+Do not simply generate a new landing page or a visual prototype. Make actual code changes and connect every feature to its appropriate data source.
+1. CRITICAL AUTHENTICATION AND ONBOARDING FIX
+Current problem
+
+The application sometimes asks users to complete onboarding repeatedly, including after signup, login, or returning to an already authenticated session.
+
+This must be fixed permanently.
+Required authentication behavior
+
+Implement the following flow:
+
+    A new visitor opens Healno and sees the landing page or authentication screen, depending on the existing product flow.
+
+    A new user signs up and verifies their account if verification is required by the existing authentication system.
+
+    After successful signup, the user completes onboarding once.
+
+    Their onboarding answers and completion status are saved securely against their authenticated user ID.
+
+    After completion, the user is redirected directly to the application dashboard.
+
+    When that user logs out and logs back in later, they must go directly to the app, not the landing page or onboarding.
+
+    If a user has partially completed onboarding and returns later, resume the incomplete steps using their saved progress.
+
+    If onboarding is complete, never show it again automatically.
+
+    If the user explicitly chooses to edit their information, open the relevant profile or health settings instead of restarting onboarding.
+
+    If the session expires, handle authentication safely and redirect the user to sign in. After successful authentication, restore the correct destination.
+
+Technical implementation
+
+    Inspect the current authentication provider, session handling, routing, and database before implementing changes.
+
+    Use the authenticated user ID as the source of truth.
+
+    Store onboarding completion status and progress persistently in the database.
+
+    Do not rely exclusively on browser state, local storage, or session storage to determine completion.
+
+    Load the authenticated user's profile and onboarding status before deciding which page to display.
+
+    Prevent duplicate onboarding submissions and duplicate profile records.
+
+    Add appropriate route guards for public pages, onboarding, and authenticated application routes.
+
+    Handle refreshes, multiple tabs, slow API responses, expired sessions, and returning users correctly.
+
+    Prevent redirect loops and flashes of the wrong page.
+
+    Keep the session secure using the existing authentication provider's recommended approach.
+
+Expected routing behavior
+User state	Required destination
+Not authenticated	Landing page or login/signup
+Newly registered, onboarding incomplete	Onboarding
+Returning user, onboarding incomplete	Resume onboarding
+Returning user, onboarding complete	Home dashboard
+Authenticated user opening the public landing page	Redirect to the app dashboard
+Authenticated user editing profile information	Profile/settings, not onboarding
+User logs out	Public landing or login page
+
+Do not mark onboarding complete until the required steps have been saved successfully.
+2. APPLICATION NAVIGATION AND INFORMATION ARCHITECTURE
+
+Redesign the main application navigation to contain these five primary sections:
+
+    Home
+
+    Symptoms
+
+    Myths
+
+    Space
+
+    Community
+
+Use a polished, responsive navigation system appropriate for a premium health application.
+Navigation requirements
+
+    On mobile, use a clean bottom navigation bar with clearly visible icons and labels.
+
+    On desktop, use a suitable sidebar or top navigation based on the existing layout.
+
+    Use the Healno orange-and-white theme.
+
+    Make the selected section visually distinct.
+
+    Ensure every navigation button works.
+
+    Maintain the correct active state after refresh and route changes.
+
+    Support browser back and forward navigation.
+
+    Ensure text and icons remain visible across mobile, tablet, and desktop sizes.
+
+    Use accessible touch targets, readable labels, keyboard navigation, and appropriate focus states.
+
+Remove Quick Log
+
+Completely remove the Quick Log page and its navigation entry.
+
+Remove its obsolete UI references, routes, and related components if they are no longer used. Check for dependencies before removing any database fields or APIs.
+
+Do not leave broken links, empty routes, or references that lead to a missing page.
+
+If any useful symptom-logging functionality currently exists inside Quick Log, preserve the necessary functionality by integrating it into the Symptoms section or My Journal.
+3. DESIGN SYSTEM AND VISUAL DIRECTION
+
+Create a modern, premium, calming, and friendly healthcare experience.
+Brand identity
+
+    Primary orange: #FF7A24
+
+    White: #FFFFFF
+
+    Use dark, readable text and neutral backgrounds where needed.
+
+    Use subtle borders, soft shadows, balanced spacing, and rounded cards.
+
+    Maintain a consistent visual language across every screen.
+
+Design principles
+
+    Mobile-first and fully responsive.
+
+    Clean layouts with clear information hierarchy.
+
+    Smooth, subtle transitions and animations.
+
+    Elegant empty states with meaningful guidance.
+
+    Consistent typography, spacing, iconography, and component behavior.
+
+    Use illustrations selectively where they help explain a concept.
+
+    Avoid unnecessary decorative elements and overcrowded dashboards.
+
+    Avoid generic template-like designs.
+
+    Respect reduced-motion accessibility settings.
+
+    Ensure sufficient color contrast and readable text.
+
+Important button visibility fix
+
+The div-section buttons and other action buttons are currently difficult to see.
+
+Fix this throughout the entire application.
+
+    Use orange backgrounds for primary action buttons.
+
+    Use white text on orange primary buttons.
+
+    Use appropriate orange borders and visible text for secondary buttons.
+
+    Make disabled, hover, pressed, loading, and focus states distinguishable.
+
+    Ensure buttons remain visible on white and light-colored cards.
+
+    Do not use white text on a white background.
+
+    Audit buttons inside cards, forms, onboarding steps, modals, navigation sections, and empty states.
+
+    Ensure clickable cards have visible interaction states and are keyboard accessible.
+
+Do not fix visibility by adding random colors. Follow one consistent design system.
+4. ONBOARDING REDESIGN
+
+Redesign onboarding to be beautiful, modern, premium, and fully functional.
+
+Use interactive cards, selectable options, searchable lists, clear progress indicators, subtle animations, helpful explanations, and responsive layouts.
+
+Onboarding must collect only information the user chooses to provide, except for fields genuinely required by the application's existing account or safety requirements.
+Step 1: Personal Profile
+
+Collect:
+
+    Real name or preferred display name.
+
+    Authenticated email address.
+
+    Age group, using suitable age ranges.
+
+    Gender, with an optional "Prefer not to say" selection.
+
+Requirements:
+
+    Automatically retrieve the authenticated email from the authentication provider.
+
+    Do not ask users to enter a different email when their account email is already available unless the workflow genuinely requires an editable contact email.
+
+    Do not invent profile information.
+
+    Allow users to update their profile later.
+
+    Use clear privacy explanations for sensitive profile information.
+
+    Make optional fields skippable where appropriate.
+
+Step 2: Health Conditions
+
+Provide searchable, multi-select categories for:
+
+    Common health conditions.
+
+    Autoimmune conditions.
+
+    Allergies.
+
+    Pain-related conditions.
+
+    Gut and digestive conditions.
+
+    Hormonal conditions.
+
+    Metabolic conditions.
+
+    Heart and circulation.
+
+    Lung and respiratory conditions.
+
+    Brain and neurological conditions.
+
+    Mental health.
+
+    Skin conditions.
+
+    Other conditions.
+
+Requirements:
+
+    Allow users to search for a condition.
+
+    Allow multiple selections.
+
+    Allow custom entries where appropriate.
+
+    Include an option such as "I don't want to add this now."
+
+    Make it clear that selecting an item records what the user reports; it does not independently verify a diagnosis.
+
+    Never automatically assign a diagnosis.
+
+    Do not preselect conditions.
+
+    Save selections to the correct authenticated user's record.
+
+Step 3: Symptoms
+
+Organize symptom selection into:
+
+    General symptoms.
+
+    Pain.
+
+    Digestion.
+
+    Heart and breathing.
+
+    Skin and body.
+
+    Mind and sleep.
+
+    Senses and nerves.
+
+    Hormonal symptoms.
+
+Requirements:
+
+    Searchable symptom list.
+
+    Multi-select support.
+
+    Custom symptom entry.
+
+    Clear selection and removal controls.
+
+    Optional details such as onset, frequency, duration, severity, and impact, where appropriate.
+
+    No symptoms should be automatically populated.
+
+    Distinguish historical symptoms from symptoms the user currently experiences.
+
+    Save the user's answers without treating them as confirmed medical diagnoses.
+
+Step 4: Medicines and Supplements
+
+Create searchable categories for:
+
+    Pain relief.
+
+    Nerve pain.
+
+    Heart and circulation.
+
+    Allergies.
+
+    Digestion.
+
+    Hormones.
+
+    Mental health.
+
+    Sleep.
+
+    Vitamins and supplements.
+
+    Other medicines.
+
+Allow users to:
+
+    Add an entry.
+
+    Edit an entry.
+
+    Remove an entry.
+
+    Record the medicine or supplement name.
+
+    Add dosage and frequency if they choose.
+
+    Record relevant notes.
+
+    Mark an entry as current or discontinued.
+
+Important safety requirements:
+
+    Do not invent medications or prescriptions.
+
+    Do not recommend medication changes automatically.
+
+    Do not assume that an item is prescribed merely because it is entered.
+
+    Clearly distinguish user-entered information from verified prescription information.
+
+    Never silently change a user's medication data.
+
+Step 5: Daily-Life Impact
+
+Ask what affects the user's daily life most.
+
+Possible topics include:
+
+    Energy and fatigue.
+
+    Sleep.
+
+    Concentration.
+
+    Mobility.
+
+    Personal care.
+
+    Household responsibilities.
+
+    Work or school.
+
+    Social activities.
+
+    Emotional well-being.
+
+    Other personal priorities.
+
+Ask how symptoms vary over time and what types of support would be helpful.
+
+Allow users to select multiple answers, add their own responses, and skip the step.
+
+Do not assume that every user has the same limitations or needs.
+Step 6: Healthcare Preferences
+
+Ask how the user prefers to manage and share health information.
+
+Possible options:
+
+    Share a summary with a healthcare professional.
+
+    Prepare notes before an appointment.
+
+    Track symptoms using Healno.
+
+    Continue using an existing health app.
+
+    Use a paper diary or personal notes.
+
+    Use a wearable or health device.
+
+    Keep information private for personal use.
+
+    Add another preference.
+
+Include clear explanations of any sharing permissions.
+
+Never share health data with a healthcare provider, caregiver, or other person without the required user authorization.
+Step 7: Review and Confirmation
+
+Show a clear summary of the information the user actually entered.
+
+Include:
+
+    Personal profile.
+
+    Selected health conditions.
+
+    Selected symptoms.
+
+    Medicines and supplements.
+
+    Daily-life impact.
+
+    Healthcare preferences.
+
+Allow users to edit individual sections without restarting onboarding.
+
+Provide a clear confirmation button.
+
+Save the completed answers to the backend, then mark onboarding as complete only after successful persistence.
+Onboarding interaction requirements
+
+Every step must support:
+
+    Back.
+
+    Continue.
+
+    Search when applicable.
+
+    Multi-select when applicable.
+
+    Clear selection.
+
+    Validation.
+
+    Individual "Skip for now" controls for optional steps.
+
+    Persistent progress.
+
+    Editable answers.
+
+    Loading and error states.
+
+    A working progress bar.
+
+    Mobile and desktop responsiveness.
+
+Do not create one global skip button that skips every step.
+
+Do not erase previously saved answers when a user navigates backward.
+5. HOME DASHBOARD
+
+Create a personalized home dashboard that uses only the authenticated user's actual saved information.
+Remove the calendar from Home
+
+There is currently a calendar at the top of the Home page.
+
+Remove it completely from the Home dashboard.
+
+Do not replace it with another large date-picker or calendar widget.
+Dashboard content
+
+The Home page may include:
+
+    A personalized greeting using the saved profile name when available.
+
+    A simple overview of recent symptom entries.
+
+    A summary of today's diary or tasks, if the user has created any.
+
+    User-entered health information.
+
+    Relevant reminders that the user has explicitly configured.
+
+    Quick access to the Symptoms, My Journal, Myths, Space, and Community features.
+
+    A clear way to add a new entry through the appropriate section.
+
+    Helpful empty states for users who have not entered data.
+
+All information must be based on real saved records.
+
+If no data exists, show a helpful message such as "Your health timeline will appear here as you add entries."
+
+Never generate fake health statistics, invented streaks, imaginary symptoms, or fabricated historical trends.
+
+Do not display default yoga plans, stretching routines, medical visits, diagnoses, or recommendations as if the user created or completed them.
+6. PROFILE SECTION
+
+Create a complete user profile area containing account information and personal settings.
+Profile features
+
+    Name and preferred display name.
+
+    Authenticated email.
+
+    Age group and optional gender information.
+
+    Editable health profile.
+
+    Health conditions and symptoms.
+
+    Medicines and supplements.
+
+    Privacy and data-sharing preferences.
+
+    Account settings.
+
+    Data export and account deletion options where supported.
+
+    Calendar access.
+
+    Logout.
+
+Optional profile picture
+
+Do not automatically add a person's photograph or an AI-generated face.
+
+Use a neutral initial-based avatar or a simple default icon.
+
+Allow users to upload or change their profile picture if they want to.
+
+If the user does not want a picture, the profile must still look complete and polished.
+Move the calendar to Profile
+
+If the application needs a calendar, place it inside the Profile section rather than Home.
+
+The calendar must:
+
+    Be accessible from Profile.
+
+    Show relevant dates and entries that actually exist.
+
+    Use the correct timezone.
+
+    Clearly distinguish diary entries, symptoms, and user-created tasks where appropriate.
+
+    Never fabricate past appointments or future healthcare visits.
+
+    Show an empty state when there are no entries.
+
+    Avoid displaying information the user has not authorized the application to access.
+
+Do not create fictional doctor appointments.
+7. MY JOURNAL — DIARY AND PERSONAL TASKS
+
+Create a dedicated My Journal experience for recording personal experiences and managing daily tasks.
+
+Remove the existing Emotion Core section and replace it with the Journal experience described below.
+
+Do not keep Emotion Core as a separate navigation destination, dashboard card, or duplicate page.
+A. Diary entries
+
+Allow users to write personal diary entries about their daily experiences.
+
+Possible fields:
+
+    Entry title.
+
+    Diary text.
+
+    Date and time.
+
+    Optional tags.
+
+    Optional links to a symptom entry or daily activity.
+
+    Optional attachments if supported safely.
+
+Requirements:
+
+    Save entries to the authenticated user's account.
+
+    Allow creating, viewing, editing, and deleting entries.
+
+    Display entries chronologically.
+
+    Provide daily, weekly, monthly, and custom-date filtering where practical.
+
+    Preserve entries after logout and login.
+
+    Show a clear empty state for new users.
+
+    Make diary entries private by default.
+
+Do not automatically analyze diary content as a medical diagnosis.
+B. Journal tasks
+
+Allow users to add specific tasks they want to complete.
+
+Examples:
+
+    Complete a personal-care task.
+
+    Buy groceries.
+
+    Prepare school or work materials.
+
+    Write a diary entry.
+
+    Record a symptom.
+
+    Complete a user-created household task.
+
+    Prepare questions for a healthcare appointment.
+
+Each task should support:
+
+    Task title.
+
+    Optional description.
+
+    Date.
+
+    Optional time.
+
+    Priority if useful.
+
+    Pending or completed status.
+
+    Edit and delete actions.
+
+    Completion timestamp when marked complete.
+
+Users must be able to create their own tasks.
+
+Do not automatically add tasks as though the user agreed to them.
+C. Fix the evening layout
+
+The existing My Journal interface displays the evening section incorrectly, with its layout appearing upside down or in the wrong order.
+
+Inspect the actual component and CSS causing this problem.
+
+Correct the structure so that:
+
+    Morning, afternoon, and evening sections appear in the correct order.
+
+    Headings are upright and readable.
+
+    Cards and content are aligned consistently.
+
+    Mobile layouts remain correct.
+
+    Chronological ordering is consistent throughout the journal.
+
+Do not hide the issue with a visual workaround. Fix the underlying layout, DOM order, CSS, or data-sorting issue responsible for it.
+8. DAILY ACTIVITY TRACKER
+
+Add a dedicated activity section for recording everyday activities and understanding how daily routines affect the user's life.
+
+The tracker must be interactive and allow users to choose activities rather than relying on automatically generated plans.
+Activity categories
+Personal care
+
+Examples:
+
+    Bathing.
+
+    Brushing teeth.
+
+    Getting dressed.
+
+    Grooming.
+
+    Other personal-care activities.
+
+Household cleaning
+
+Examples:
+
+    Cleaning a room.
+
+    Sweeping or mopping.
+
+    Washing dishes.
+
+    Laundry.
+
+    Organizing household items.
+
+Groceries and errands
+
+Examples:
+
+    Grocery shopping.
+
+    Buying essential items.
+
+    Visiting a local shop.
+
+    Completing personal errands.
+
+Food and meal preparation
+
+Examples:
+
+    Preparing meals.
+
+    Preparing snacks.
+
+    Planning groceries.
+
+    Other meal-related activities.
+
+Work, school, and study
+
+Examples:
+
+    Studying.
+
+    Completing assignments.
+
+    Reading.
+
+    Work-related activities.
+
+Movement and recreation
+
+Examples:
+
+    Walking.
+
+    Gentle movement.
+
+    Hobbies.
+
+    Leisure activities.
+
+Do not automatically prescribe exercise, yoga, stretching, or other routines.
+Custom activities
+
+Allow users to create their own activity categories and activity names.
+Interaction flow
+
+    The user opens the Activity section.
+
+    The user selects a category, such as Personal Care.
+
+    The application displays the activities belonging to that category.
+
+    The user clicks an activity, such as Bathing or Brushing Teeth.
+
+    A form opens for recording the activity.
+
+    The user can enter the date, optional time, duration, and optional notes.
+
+    The user saves the entry.
+
+    The activity appears in the user's personal activity history.
+
+    The user can edit or delete the entry.
+
+Provide an obvious visual distinction between selected and unselected cards.
+
+Use the orange primary-action styling consistently.
+Activity history
+
+Display actual activity records by date and category.
+
+Where supported, allow users to review patterns such as which activities they recorded most frequently.
+
+Do not infer medical causes or health outcomes from activity history.
+
+Do not display invented activity-completion statistics.
+9. SYMPTOMS SECTION
+
+Create a dedicated Symptoms section for recording and reviewing the user's reported symptoms.
+Required features
+
+    Add a symptom.
+
+    Search existing symptoms.
+
+    Create a custom symptom.
+
+    Record symptom onset and date.
+
+    Record frequency, duration, and severity where useful.
+
+    Add optional notes.
+
+    Edit and delete entries.
+
+    View symptom history.
+
+    Filter by date and symptom.
+
+    Compare user-entered entries across different periods.
+
+    View symptom information in a timeline.
+
+    Export a useful summary if supported.
+
+Remove Emotion Core
+
+Remove the Emotion Core component and any related UI that currently appears inside the Symptoms section.
+
+Do not show an Emotion Core card, tab, panel, or duplicate feature.
+
+Personal diary writing belongs in My Journal.
+
+If a user wishes to document how they felt during a symptom episode, let them include optional notes without forcing an emotion-tracking workflow.
+Data integrity
+
+    Never automatically create symptoms.
+
+    Never diagnose conditions from logged symptoms.
+
+    Clearly distinguish user-reported symptoms from clinician-confirmed information.
+
+    Do not present correlations as proven causes.
+
+    Preserve the original entry date and edit history where appropriate.
+
+    Respect user privacy and consent.
+
+10. MYTHS — EVIDENCE-BASED MINI-LEARNING
+
+Build a simple, engaging, topic-based learning section about chronic health, everyday health management, and understanding personal health information.
+
+The section should feel like a collection of short lessons rather than a complicated course platform.
+Topic-based lessons
+
+Include lessons such as:
+
+    Understanding spoon theory.
+
+    Understanding pacing and energy management.
+
+    Communicating effectively with healthcare professionals.
+
+    Understanding fatigue and tiredness.
+
+    Preparing for healthcare appointments.
+
+    Organizing personal health information.
+
+    Understanding symptoms and symptom tracking.
+
+    Understanding medication safety.
+
+    Recognizing common health myths.
+
+    Understanding the difference between a personal experience and established medical evidence.
+
+    Communicating personal needs.
+
+    Understanding rest, daily activities, and routines.
+
+Add other relevant topics based on reliable research.
+Lesson structure
+
+Each topic should contain:
+
+    A clear title.
+
+    A short introduction.
+
+    A simple explanation in everyday language.
+
+    A few concise learning points.
+
+    A real-world example.
+
+    A short multiple-choice mini-test.
+
+    Immediate feedback explaining the answer.
+
+    An option to review the lesson.
+
+    A completion state based on the user's actual progress.
+
+Keep lessons short and easy to navigate.
+
+Do not require users to read long articles before interacting with the lesson.
+Mini-test behavior
+
+    Display one question at a time.
+
+    Provide selectable answer cards.
+
+    Make selected answers visibly distinct.
+
+    Include a Submit or Check Answer button.
+
+    Explain why the selected answer is correct or incorrect.
+
+    Allow users to continue to the next question.
+
+    Show a completion screen after the lesson.
+
+    Save lesson progress and answers to the authenticated user's account where appropriate.
+
+    Never fabricate user scores or completed lessons.
+
+    Allow users to revisit completed lessons.
+
+Search and discovery
+
+    Add topic search.
+
+    Organize lessons into clear categories.
+
+    Provide a simple list or card grid.
+
+    Include readable descriptions and estimated reading time where appropriate.
+
+    Make every lesson card clickable.
+
+Research and source requirements
+
+Research the educational material using reliable sources, including appropriate healthcare organizations, government health agencies, recognized medical institutions, and peer-reviewed publications.
+
+For every lesson:
+
+    Verify important medical claims.
+
+    Include relevant source names and direct links.
+
+    Include publication or review dates when available.
+
+    Avoid presenting personal anecdotes as established scientific evidence.
+
+    Distinguish well-supported evidence from emerging research or uncertainty.
+
+    Avoid unsupported claims about chronic illnesses.
+
+    Do not provide individualized diagnoses or treatment instructions.
+
+    Clearly state when a topic requires advice from a qualified healthcare professional.
+
+Do not invent research citations or claim that a source supports something it does not say.
+
+Build a maintainable content structure so that new topics and quizzes can be added without rewriting the entire learning interface.
+11. SPACE SECTION
+
+Retain and improve the Space section as a calm, accessible area for health-related resources, reflection, and self-guided learning.
+
+First inspect the existing implementation and identify the intended purpose of this section.
+
+Preserve useful existing features, but ensure that:
+
+    It does not duplicate My Journal.
+
+    It does not contain Emotion Core.
+
+    It does not introduce fake user data.
+
+    Its content is clearly labeled.
+
+    Users can navigate between Space and the other primary sections.
+
+    Empty states are attractive and helpful.
+
+    Any saved resources or entries belong to the authenticated user.
+
+    Any educational or health claims use trustworthy sources.
+
+Do not invent complex features that are unrelated to the existing application.
+
+If the current Space section already has a clear, useful purpose, preserve that purpose and improve its usability rather than replacing it without reason.
+12. COMMUNITY SECTION
+
+Retain and improve the Community section as a supportive space for users to connect around shared health experiences.
+
+Inspect the current implementation before modifying its features.
+
+Where community functionality exists or is being implemented, ensure:
+
+    Clear post creation and viewing flows.
+
+    Appropriate loading, empty, and error states.
+
+    Correct ownership of posts and comments.
+
+    Safe editing and deletion controls.
+
+    Reporting and moderation mechanisms where supported.
+
+    Privacy-conscious profile information.
+
+    Protection against spam and abusive content.
+
+    Accessible controls and readable text.
+
+    Clear rules explaining that shared experiences do not replace professional medical advice.
+
+Never expose a user's private diary, medical records, medication history, or symptom history to the community.
+
+Do not automatically publish anything from My Journal or Symptoms.
+
+Require explicit user action before publishing information.
+
+If the existing app does not yet support a feature such as comments or reporting, implement it only where appropriate to the current architecture, and clearly report any remaining limitations.
+13. REMOVE AUTOMATIC PLANS AND FAKE DOCTOR VISITS
+
+Remove the existing default plan content, including generic yoga plans, stretching routines, and other automatically generated plans that appear as if they belong to the user.
+
+Remove the fake or default upcoming doctor visit section.
+
+Requirements:
+
+    Do not create fictional appointments.
+
+    Do not add generic routines to the user's personal schedule without consent.
+
+    Do not invent health goals.
+
+    Do not create fake reminders.
+
+    Do not treat sample data as real user data.
+
+    Do not automatically mark activities as completed.
+
+    Do not display fabricated health progress.
+
+Users may create their own plans, tasks, appointments, or reminders if these features are supported. Such records must be explicitly created by the user or imported through an authorized, verified integration.
+
+If a feature has no saved records, display a proper empty state.
+
+Example:
+
+"No upcoming appointments. Add an appointment if you would like to keep track of one."
+
+Do not remove useful user-created plans or appointments when cleaning up fake defaults.
+14. DATABASE AND BACKEND CLEANUP
+
+Audit the existing database and remove fake, hardcoded, or demo user records from the active application experience.
+
+Important: inspect the current schema and data dependencies before making destructive changes.
+
+Do not blindly drop every database table or erase all user records.
+Database requirements
+
+    Use the existing database where appropriate.
+
+    Create or update schema migrations as needed.
+
+    Associate all user-specific records with the correct authenticated user ID.
+
+    Add appropriate foreign-key relationships.
+
+    Add suitable indexes.
+
+    Add created-at and updated-at timestamps.
+
+    Use proper deletion and retention behavior.
+
+    Prevent duplicate submissions.
+
+    Validate incoming data on the server.
+
+    Implement appropriate row-level security or equivalent authorization policies.
+
+    Ensure users cannot read, modify, or delete another user's records.
+
+    Keep public learning content separate from private user information.
+
+    Store user-specific learning progress separately from lesson content.
+
+    Maintain referential integrity when records are edited or deleted.
+
+Suggested data entities
+
+Adapt these to the existing architecture rather than blindly duplicating existing tables.
+
+    User profiles.
+
+    Onboarding progress.
+
+    User-reported health conditions.
+
+    User-reported symptoms.
+
+    Medicines and supplements.
+
+    Healthcare preferences.
+
+    Diary entries.
+
+    Personal tasks.
+
+    Activity categories.
+
+    Activity entries.
+
+    Learning topics.
+
+    Learning lessons.
+
+    Quiz questions and answers.
+
+    User learning progress.
+
+    User-created appointments, if supported.
+
+    Community posts and comments, if supported.
+
+    User privacy and sharing preferences.
+
+Use the correct relationships and access policies for each entity.
+Data cleanup safeguards
+
+    Never delete real user information just because it resembles test data.
+
+    Back up or stage destructive migrations appropriately.
+
+    Identify seed scripts, mock services, fallback fixtures, demo accounts, and hardcoded arrays.
+
+    Remove demo data from production-facing interfaces.
+
+    Use synthetic fixtures only in isolated automated tests.
+
+    Never substitute a fictional profile when a real profile fails to load.
+
+    Report any legacy records that cannot safely be removed automatically.
+
+15. PERSONALIZED DATA AND EMPTY STATES
+
+The application must use actual authenticated user information throughout the entire experience.
+Never use fake data
+
+Remove hardcoded examples that are displayed as real information, including:
+
+    Fake names.
+
+    Fake email addresses.
+
+    Fake medications.
+
+    Fake symptoms.
+
+    Fake health conditions.
+
+    Fake medical records.
+
+    Fake appointments.
+
+    Fake diary entries.
+
+    Fake activities.
+
+    Fake health goals.
+
+    Fake statistics.
+
+    Fake learning progress.
+
+    Fake community activity presented as real user activity.
+
+Use placeholders only in form inputs where they are clearly examples rather than saved values.
+
+Never use placeholder content as a fallback for a failed database request.
+Correct behavior when data is unavailable
+
+Provide polished empty states for:
+
+    A new user's dashboard.
+
+    No symptoms recorded.
+
+    No medicines added.
+
+    No diary entries.
+
+    No tasks.
+
+    No activity history.
+
+    No upcoming appointments.
+
+    No completed lessons.
+
+    No saved learning progress.
+
+    No community posts.
+
+    Missing optional profile information.
+
+Each empty state should explain what the section does and offer an appropriate action when relevant.
+
+Never fill empty space with fabricated personal information.
+16. API, STATE MANAGEMENT, AND ERROR HANDLING
+
+Audit every feature's frontend-to-backend data flow.
+
+Requirements:
+
+    Connect forms to real backend endpoints.
+
+    Validate inputs on the client and server.
+
+    Handle loading states.
+
+    Handle network failures.
+
+    Handle expired sessions.
+
+    Handle authorization failures.
+
+    Handle empty API responses.
+
+    Prevent duplicate form submissions.
+
+    Display clear success and error messages.
+
+    Keep frontend state synchronized with saved backend records.
+
+    Refresh data correctly after create, edit, and delete operations.
+
+    Avoid stale data after logout or account switching.
+
+    Prevent one user's information from appearing in another user's session.
+
+    Ensure browser refreshes do not break routing or saved state.
+
+    Remove obsolete API calls and broken integrations.
+
+    Do not expose secrets, API keys, or privileged database credentials in client-side code.
+
+Do not show a success message before the backend confirms that the operation succeeded.
+17. SECURITY, PRIVACY, AND HEALTHCARE SAFETY
+
+Because Healno handles potentially sensitive health information, prioritize privacy and data integrity.
+
+Implement or verify:
+
+    Secure authentication and authorization.
+
+    Server-side access controls.
+
+    Proper database access policies.
+
+    Secure secret management.
+
+    Input validation and sanitization.
+
+    Protection against common web vulnerabilities.
+
+    Safe file-upload handling if attachments exist.
+
+    Rate limiting where appropriate.
+
+    Secure error handling without exposing sensitive information.
+
+    User-controlled data sharing.
+
+    Appropriate deletion and export mechanisms.
+
+    Minimal collection of personal information.
+
+    Clear privacy explanations.
+
+    Appropriate consent for third-party integrations.
+
+    Age-appropriate safeguards based on the application's intended audience and applicable requirements.
+
+Never expose private health information in public URLs, logs, analytics, community posts, or error messages.
+
+Never claim that the app is compliant with a legal or healthcare standard unless the implementation and relevant assessment support that claim.
+
+The application must support personal health organization and education without presenting AI-generated conclusions as verified medical diagnoses.
+18. PERFORMANCE AND ACCESSIBILITY
+
+Improve the application without unnecessarily changing its architecture.
+
+Check for:
+
+    Slow page loads.
+
+    Unnecessary API requests.
+
+    Duplicate network requests.
+
+    Unnecessary rerenders.
+
+    Large bundles.
+
+    Missing loading indicators.
+
+    Broken responsive layouts.
+
+    Overflowing cards.
+
+    Misaligned forms.
+
+    Unreadable text.
+
+    Invisible buttons.
+
+    Broken icons.
+
+    Missing labels.
+
+    Inaccessible form controls.
+
+    Keyboard navigation problems.
+
+    Inadequate contrast.
+
+    Motion that cannot be reduced.
+
+    Incorrect date and timezone handling.
+
+Optimize queries and rendering where needed.
+
+Ensure the application works on common mobile screens, tablets, laptops, and desktop monitors.
+19. TESTING REQUIREMENTS
+
+Do not finish after implementing the UI.
+
+Run the relevant automated tests and manually verify all major workflows.
+Authentication and onboarding tests
+
+    New user signup.
+
+    Email verification if required.
+
+    First-time onboarding.
+
+    Optional-step skipping.
+
+    Back and Continue navigation.
+
+    Search and multi-select.
+
+    Onboarding validation.
+
+    Saving partial progress.
+
+    Refreshing during onboarding.
+
+    Returning to incomplete onboarding.
+
+    Completing onboarding.
+
+    Logging out and logging in again.
+
+    Confirming onboarding does not repeat.
+
+    Opening the landing page while authenticated.
+
+    Editing profile information after onboarding.
+
+Functional tests
+
+    Add, edit, and delete symptoms.
+
+    Add, edit, and delete medicines.
+
+    Create, edit, and delete diary entries.
+
+    Create and complete personal tasks.
+
+    Add and edit activity records.
+
+    Open each activity category.
+
+    Select activities such as bathing, brushing teeth, household cleaning, and grocery shopping.
+
+    Search and complete learning lessons.
+
+    Submit mini-test answers and view feedback.
+
+    Save and retrieve learning progress.
+
+    Navigate between Home, Symptoms, Myths, Space, and Community.
+
+    Open Profile and access the calendar.
+
+    Confirm Home no longer contains the calendar.
+
+    Confirm Quick Log is removed.
+
+    Confirm Emotion Core is removed.
+
+    Confirm the default plan and fake doctor visit are removed.
+
+    Confirm profile pictures are optional.
+
+    Confirm buttons are visible and usable.
+
+    Confirm empty states appear correctly.
+
+Security tests
+
+    Verify one user cannot access another user's data.
+
+    Test unauthorized API requests.
+
+    Test expired sessions.
+
+    Test account switching.
+
+    Test invalid form submissions.
+
+    Verify secrets are not exposed.
+
+    Verify private journal entries are never published automatically.
+
+Production checks
+
+    Run linting.
+
+    Run type checks if available.
+
+    Run unit and integration tests.
+
+    Run end-to-end tests where the project supports them.
+
+    Run the production build.
+
+    Fix all errors introduced by the changes.
+
+    Check browser console errors.
+
+    Check server logs and failed API requests.
+
+    Verify database migrations and policies.
+
+    Verify responsive layouts.
+
+    Confirm there are no broken navigation links.
+
+Do not claim a test passed unless it was actually executed and its result was checked.
+20. IMPLEMENTATION WORKFLOW
+
+Follow this sequence.
+Phase 1 — Inspect
+
+Inspect:
+
+    Project structure.
+
+    Frontend framework.
+
+    Backend framework.
+
+    Authentication provider.
+
+    Database schema.
+
+    Existing migrations.
+
+    Routing.
+
+    Shared components.
+
+    Current Home page.
+
+    Existing Symptoms and Journal components.
+
+    Myths, Space, and Community pages.
+
+    Profile page.
+
+    Calendar implementation.
+
+    Quick Log.
+
+    Emotion Core.
+
+    Default plans and doctor visit widgets.
+
+    API integrations.
+
+    Existing tests.
+
+    Environment configuration.
+
+Identify the actual causes of repeated onboarding, layout issues, invisible buttons, and broken interactions.
+Phase 2 — Plan and protect
+
+    Identify dependencies before deleting components.
+
+    Prepare safe database migrations.
+
+    Preserve existing working functionality.
+
+    Separate demo fixtures from production data.
+
+    Determine which features can be repaired and which need new implementation.
+
+    Avoid destructive database changes without a verified reason and appropriate backup.
+
+Phase 3 — Implement
+
+Implement the authentication and onboarding fix first.
+
+Then improve the design system and navigation.
+
+Next, implement the Home, Profile, My Journal, Activity, Symptoms, Myths, Space, and Community requirements.
+
+Then fix database access, data integrity, API handling, privacy, and performance.
+Phase 4 — Verify
+
+Run the tests, inspect the production build, and manually verify the main user flows.
+
+Fix any regressions introduced by the work.
+Phase 5 — Report
+
+Provide a concise but complete implementation report covering:
+
+    What was changed.
+
+    Which files and components were modified.
+
+    What database migrations were added or changed.
+
+    How the onboarding persistence and routing issue was fixed.
+
+    Which fake data and obsolete components were removed.
+
+    Which features were implemented and tested.
+
+    The actual test and production-build results.
+
+    Any environment variables, integrations, or deployment steps still required.
+
+    Any remaining bugs, limitations, or unfinished work.
+
+Distinguish between implemented, tested, partially implemented, and not implemented features.
+
+Do not claim that a feature works merely because its UI exists.
+FINAL ACCEPTANCE CRITERIA
+
+The task is complete only when the following conditions are met:
+
+    A returning authenticated user opens Healno directly into the application.
+
+    Onboarding appears only when required and does not repeat after completion.
+
+    Onboarding progress is securely persisted for the correct user.
+
+    The main navigation contains Home, Symptoms, Myths, Space, and Community.
+
+    Quick Log has been removed.
+
+    The Home page no longer contains the calendar.
+
+    The calendar is available in Profile.
+
+    Profile pictures are optional.
+
+    My Journal contains a private diary and personal task management.
+
+    The evening layout is corrected.
+
+    Emotion Core has been removed.
+
+    The Activity section supports selectable categories and individual activity logging.
+
+    Myths contains simple, research-backed, topic-wise mini-lessons and interactive tests.
+
+    Default yoga/stretching plans and fictional doctor visits are removed.
+
+    All user-facing personal data comes from actual saved records.
+
+    Appropriate empty states appear when data is missing.
+
+    Buttons are visible, orange where appropriate, and functional.
+
+    Database relationships, authorization, and privacy controls are verified.
+
+    Major user workflows have been tested.
+
+    The production build succeeds, or any failure is clearly documented with its cause.
+
+    Existing useful functionality is preserved.
+
+    No unfinished feature is falsely reported as complete.
+
+Start by inspecting the existing codebase. Then make the actual changes, test them, and report the verified results. Do not stop after creating a plan, redesigning a screen, or generating placeholder components.

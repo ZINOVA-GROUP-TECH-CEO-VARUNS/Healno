@@ -12,6 +12,7 @@ import {
   Send,
   Sparkles,
 } from 'lucide-react';
+import { UserAvatar } from '../common/UserAvatar';
 
 interface CommunityScreenProps {
   posts: CommunityPost[];
@@ -100,9 +101,9 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
 
         <button
           onClick={() => setShowNewPostModal(true)}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#132A1F] hover:bg-[#2D6A4F] text-white text-xs font-semibold shadow-xs transition-colors"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4 stroke-[2.5]" />
           <span>Share</span>
         </button>
       </div>
@@ -156,9 +157,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
               {/* Author info */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-[#E8EFE9] text-[#132A1F] flex items-center justify-center font-bold text-xs">
-                    {post.isAnonymous ? '🌿' : post.authorName[0]}
-                  </div>
+                  <UserAvatar name={post.isAnonymous ? '' : post.authorName} size="sm" />
                   <div>
                     <div className="text-xs font-bold text-[#132A1F] flex items-center gap-1.5">
                       <span>{post.authorName}</span>

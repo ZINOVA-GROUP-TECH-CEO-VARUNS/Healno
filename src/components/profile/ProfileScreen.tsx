@@ -27,6 +27,7 @@ import {
   Info,
 } from 'lucide-react';
 import { storageService } from '../../services/storage';
+import { UserAvatar } from '../common/UserAvatar';
 
 interface ProfileScreenProps {
   profile: UserProfile;
@@ -239,7 +240,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           onClick={() => setActiveTab('profile')}
           className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all ${
             activeTab === 'profile'
-              ? 'bg-[#E89D35] text-white shadow-xs'
+              ? 'bg-[#FF7A24] text-white shadow-xs'
               : 'text-[#132A1F]/70 hover:text-[#132A1F]'
           }`}
         >
@@ -249,7 +250,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           onClick={() => setActiveTab('calendar')}
           className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 ${
             activeTab === 'calendar'
-              ? 'bg-[#E89D35] text-white shadow-xs'
+              ? 'bg-[#FF7A24] text-white shadow-xs'
               : 'text-[#132A1F]/70 hover:text-[#132A1F]'
           }`}
         >
@@ -260,7 +261,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           onClick={() => setActiveTab('achievements')}
           className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all ${
             activeTab === 'achievements'
-              ? 'bg-[#E89D35] text-white shadow-xs'
+              ? 'bg-[#FF7A24] text-white shadow-xs'
               : 'text-[#132A1F]/70 hover:text-[#132A1F]'
           }`}
         >
@@ -270,7 +271,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           onClick={() => setActiveTab('privacy')}
           className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all ${
             activeTab === 'privacy'
-              ? 'bg-[#E89D35] text-white shadow-xs'
+              ? 'bg-[#FF7A24] text-white shadow-xs'
               : 'text-[#132A1F]/70 hover:text-[#132A1F]'
           }`}
         >
@@ -283,21 +284,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <div className="space-y-4">
           {/* User Card */}
           <div className="bg-white rounded-3xl p-5 border border-[#132A1F]/10 shadow-xs flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#132A1F]/20 shadow-xs">
-              <img
-                src={profile.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80"}
-                alt={profile.name}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover"
-              />
-            </div>
+            <UserAvatar name={profile.name} email={profile.email} size="xl" />
 
             <div className="flex-1 min-w-0">
-              <h3 className="text-base font-bold text-[#132A1F] font-display truncate">{profile.name}</h3>
-              <p className="text-xs text-[#132A1F]/60 truncate">{profile.email}</p>
+              <h3 className="text-base font-bold text-[#132A1F] font-display truncate">
+                {profile.name || 'Healno Member'}
+              </h3>
+              <p className="text-xs text-[#132A1F]/60 truncate">{profile.email || 'Private Account'}</p>
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <span className="text-[10px] bg-[#E8EFE9] text-[#132A1F] px-2 py-0.5 rounded-full font-semibold">
-                  {profile.age || 32} years old
+                  {profile.age ? `${profile.age} years old` : 'Active Member'}
                 </span>
                 <span className="text-[10px] bg-[#FFE5D9] text-[#6B4435] px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
                   <Flame className="w-3 h-3 text-[#E76F51] fill-[#E76F51]" />

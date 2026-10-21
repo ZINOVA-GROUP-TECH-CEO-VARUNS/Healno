@@ -1,6 +1,8 @@
 import React from 'react';
 import { UserProfile } from '../../types';
 import { Flame, Calendar as CalendarIcon } from 'lucide-react';
+import { HealnoLogo } from '../common/HealnoLogo';
+import { UserAvatar } from '../common/UserAvatar';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
 
 interface TopHeaderProps {
@@ -20,22 +22,20 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onOpenAI,
   onBackToWebsite,
 }) => {
+  const displayName = profile.name?.trim() ? profile.name.split(' ')[0] : 'Friend';
+
   return (
     <header className="sticky top-0 z-30 bg-[#F8F6F0]/95 backdrop-blur-md px-4 py-3 border-b border-[#132A1F]/5 transition-all">
       <div className="max-w-4xl mx-auto">
-        {/* Top bar with Brand, Calendar in Profile Trigger, Streak, and User Avatar */}
+        {/* Top bar with Brand Logo (code-based vector), Streak, Calendar, and User Avatar */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={onBackToWebsite}
               title="Return to Healno Landing Website"
-              className="w-9 h-9 rounded-2xl bg-white border border-[#132A1F]/10 hover:border-[#132A1F]/30 p-1 flex items-center justify-center shadow-xs transition-transform active:scale-95"
+              className="p-1 flex items-center justify-center transition-transform active:scale-95 focus:outline-none"
             >
-              <img
-                src="/assets/aistudio/Orange_Cross_Heart_Medical_Icon_bd9b638a.png"
-                alt="Healno Logo"
-                className="w-full h-full object-contain"
-              />
+              <HealnoLogo size={34} />
             </button>
             <div>
               <div className="flex items-center gap-2">
@@ -48,7 +48,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 </button>
               </div>
               <h1 className="text-xl md:text-2xl font-bold text-[#132A1F] font-display leading-none">
-                Hi, {profile.name.split(' ')[0]}
+                Hi, {displayName}
               </h1>
             </div>
           </div>
@@ -60,7 +60,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             {/* Orange Button to open Calendar in Profile */}
             <button
               onClick={onOpenCalendar}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E89D35] hover:bg-[#d88d25] text-white text-xs font-bold transition-all shadow-xs active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FF7A24] hover:bg-[#d86214] text-white text-xs font-bold transition-all shadow-xs active:scale-95"
               title="Open Activity Calendar in Profile"
             >
               <CalendarIcon className="w-3.5 h-3.5" />
@@ -73,28 +73,30 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFE5D9] hover:bg-[#ffd9c9] text-[#6B4435] text-xs font-semibold shadow-xs transition-colors"
               title="View Streak History in Profile Calendar"
             >
-              <Flame className="w-3.5 h-3.5 text-[#E76F51] fill-[#E76F51]" />
-              <span>{profile.streakDays}d</span>
+              <Flame className="w-3.5 h-3.5 text-[#FF7A24] fill-[#FF7A24]" />
+              <span>{profile.streakDays || 0}d</span>
             </button>
 
             {/* Spoon count indicator */}
-            <div className="hidden xs:flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#E8EFE9] text-[#132A1F] text-xs font-semibold shadow-xs">
-              <span className="text-xs">🥄</span>
-              <span>{remainingSpoons}/{profile.dailySpoonsCapacity}</span>
+            <div className="hidden xs:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#E8EFE9] text-[#132A1F] text-xs font-semibold shadow-xs">
+              <svg className="w-3.5 h-3.5 text-[#FF7A24]" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C8.69 2 6 4.69 6 8c0 2.97 2.16 5.43 5 5.91V21a1 1 0 0 0 2 0v-7.09c2.84-.48 5-2.94 5-5.91 0-3.31-2.69-6-6-6z" />
+              </svg>
+              <span>{remainingSpoons}/{profile.dailySpoonsCapacity || 12}</span>
             </div>
 
-            {/* Profile Avatar Trigger */}
+            {/* User Avatar Trigger (initials-based, no stock photos!) */}
             <button
               onClick={onOpenProfile}
-              className="w-9 h-9 rounded-full overflow-hidden border-2 border-[#132A1F]/10 hover:border-[#E89D35] transition-all active:scale-95 shadow-xs focus:outline-none focus:ring-2 focus:ring-[#E89D35]/30"
+              className="rounded-full transition-transform active:scale-95 focus:outline-none focus:ring-2 focus:ring-[#FF7A24]/50"
               title="Open Profile & Settings"
               aria-label="User Profile"
             >
-              <img
-                src={profile.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80"}
-                alt={profile.name}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover"
+              <UserAvatar
+                name={profile.name}
+                email={profile.email}
+                avatarUrl={profile.avatarUrl}
+                size="md"
               />
             </button>
           </div>
@@ -103,4 +105,3 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
     </header>
   );
 };
-

@@ -24,6 +24,8 @@ import { CommunityScreen } from './components/community/CommunityScreen';
 import { DocumentsScreen } from './components/documents/DocumentsScreen';
 import { AppointmentsScreen } from './components/appointments/AppointmentsScreen';
 import { LearningScreen } from './components/learning/LearningScreen';
+import { MythsScreen } from './components/learning/MythsScreen';
+import { SpaceScreen } from './components/space/SpaceScreen';
 import { MealsScreen } from './components/meals/MealsScreen';
 import { ProfileScreen } from './components/profile/ProfileScreen';
 import { JournalScreen } from './components/journal/JournalScreen';
@@ -37,8 +39,11 @@ import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 import { dbService } from './services/db';
 
 export default function App() {
-  // Website First Landing Experience State: 'website' is the primary entry point
-  const [viewMode, setViewMode] = useState<'website' | 'app'>('website');
+  // Website First Landing Experience State: Returning onboarded users launch directly to app
+  const [viewMode, setViewMode] = useState<'website' | 'app'>(() => {
+    const p = storageService.getProfile();
+    return p.isAuthenticated && p.isOnboarded ? 'app' : 'website';
+  });
 
   // Core state from storageService & dbService
   const [profile, setProfile] = useState<UserProfile>(() => storageService.getProfile());
@@ -60,6 +65,7 @@ export default function App() {
   const [activeSecondaryView, setActiveSecondaryView] = useState<
     'documents' | 'appointments' | 'meals' | 'lessons' | 'profile' | 'journal' | null
   >(null);
+  const [profileInitialTab, setProfileInitialTab] = useState<'profile' | 'calendar' | 'achievements' | 'privacy'>('profile');
 
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
@@ -274,7 +280,7 @@ export default function App() {
           onLaunchApp={(mode) => {
             setViewMode('app');
             if (mode === 'login') setIsAuthModalOpen(true);
-            if (mode === 'onboarding') setIsOnboardingOpen(true);
+            else if (mode === 'onboarding' || !profile.isOnboarded) setIsOnboardingOpen(true);
           }}
         />
         <OfflineIndicator />
@@ -282,15 +288,27 @@ export default function App() {
           isOpen={isAuthModalOpen}
           onClose={() => setIsAuthModalOpen(false)}
           onLoginSuccess={(updatedUser) => {
-            handleUpdateProfile({ ...profile, ...updatedUser });
+            const nextProfile = { ...profile, ...updatedUser };
+            handleUpdateProfile(nextProfile);
+            setIsAuthModalOpen(false);
+            setViewMode('app');
+            if (!nextProfile.isOnboarded) {
+              setIsOnboardingOpen(true);
+            }
           }}
-          onStartOnboarding={() => setIsOnboardingOpen(true)}
+          onStartOnboarding={() => {
+            setIsAuthModalOpen(false);
+            setIsOnboardingOpen(true);
+          }}
         />
         <OnboardingWizard
           isOpen={isOnboardingOpen}
           onClose={() => setIsOnboardingOpen(false)}
           onComplete={(newProfile) => {
-            handleUpdateProfile({ ...profile, ...newProfile });
+            const finishedProfile = { ...profile, ...newProfile, isOnboarded: true, isAuthenticated: true };
+            handleUpdateProfile(finishedProfile);
+            setIsOnboardingOpen(false);
+            setViewMode('app');
           }}
           initialProfile={profile}
         />
@@ -304,9 +322,14 @@ export default function App() {
       <TopHeader
         profile={profile}
         remainingSpoons={remainingSpoons}
-        selectedDate={selectedDate}
-        onSelectDate={setSelectedDate}
-        onOpenProfile={() => setActiveSecondaryView('profile')}
+        onOpenProfile={() => {
+          setProfileInitialTab('profile');
+          setActiveSecondaryView('profile');
+        }}
+        onOpenCalendar={() => {
+          setProfileInitialTab('calendar');
+          setActiveSecondaryView('profile');
+        }}
         onOpenAI={() => setIsAIModalOpen(true)}
         onBackToWebsite={() => setViewMode('website')}
       />
@@ -356,6 +379,7 @@ export default function App() {
           <ProfileScreen
             profile={profile}
             achievements={achievements}
+            initialTab={profileInitialTab}
             onUpdateProfile={handleUpdateProfile}
             onExportAllData={handleExportAllJSON}
             onResetData={handleResetData}
@@ -416,34 +440,27 @@ export default function App() {
         {!activeSecondaryView && currentTab === 'symptoms' && (
           <SymptomsScreen
             symptoms={symptoms}
-            emotions={emotions}
             onAddSymptom={handleAddSymptom}
-            onUpdateEmotion={handleUpdateEmotion}
             onDeleteSymptom={handleDeleteSymptom}
             onExportSummary={() => setIsExportModalOpen(true)}
             xpScore={profile.xp}
           />
         )}
 
-        {!activeSecondaryView && currentTab === 'meds' && (
-          <MedsScreen
-            medications={medications}
-            medEvents={medEvents}
-            onSaveMedication={handleSaveMedication}
-            onDeleteMedication={handleDeleteMedication}
-            onRecordMedEvent={handleRecordMedEvent}
+        {!activeSecondaryView && currentTab === 'myths' && (
+          <MythsScreen
+            lessons={lessons}
+            onCompleteLesson={handleCompleteLesson}
           />
         )}
 
-        {!activeSecondaryView && currentTab === 'pace' && (
-          <PaceScreen
-            tasks={pacingTasks}
-            dailyCapacity={profile.dailySpoonsCapacity}
+        {!activeSecondaryView && currentTab === 'space' && (
+          <SpaceScreen
             remainingSpoons={remainingSpoons}
-            onUpdateCapacity={handleUpdateCapacity}
-            onToggleTask={handleToggleTask}
-            onAddTask={handleAddTask}
-            onDeleteTask={handleDeleteTask}
+            onActivityLogged={() => {
+              const realStreak = storageService.calculateRealStreak();
+              setProfile((prev) => ({ ...prev, streakDays: realStreak }));
+            }}
           />
         )}
 
@@ -458,11 +475,10 @@ export default function App() {
         )}
       </main>
 
-      {/* Persistent Bottom Navigation with 5 tabs + Quick action button */}
+      {/* Persistent Bottom Navigation with 5 tabs */}
       <BottomNav
         currentTab={currentTab}
         onSelectTab={handleSelectTab}
-        onQuickAction={() => setIsAIModalOpen(true)}
       />
 
       {/* AI Health Companion Conversational Modal */}

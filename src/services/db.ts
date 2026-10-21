@@ -407,4 +407,26 @@ export const dbService = {
       }
     }
   },
+
+  // Journal Tasks
+  getJournalTasks: async () => {
+    return storageService.getJournalTasks();
+  },
+  saveJournalTask: async (task: any) => {
+    storageService.saveJournalTask(task);
+  },
+  deleteJournalTask: async (id: string) => {
+    storageService.deleteJournalTask(id);
+  },
+
+  // Daily Activity Tracker
+  getActivities: async () => {
+    return storageService.getActivities();
+  },
+  addActivity: async (entry: any) => {
+    storageService.addActivity(entry);
+  },
+  deleteActivity: async (id: string) => {
+    storageService.deleteActivity(id);
+  },
 };

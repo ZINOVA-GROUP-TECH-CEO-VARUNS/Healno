@@ -18,6 +18,8 @@ import {
   Smile,
 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
+import { HealnoLogo } from '../common/HealnoLogo';
+import { SunMorningIllustration } from '../common/CodeIllustrations';
 
 interface LandingPageProps {
   onLaunchApp: (mode?: 'login' | 'signup' | 'onboarding') => void;
@@ -29,15 +31,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
       {/* Top Bar Navigation */}
       <header className="sticky top-0 z-40 bg-[#F8F6F0]/90 backdrop-blur-md border-b border-[#132A1F]/5 px-4 md:px-8 py-3.5 transition-all">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-6">
-          {/* Brand with Official Logo */}
+          {/* Brand with Official Vector Logo */}
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-white p-1.5 shadow-xs border border-[#132A1F]/10 flex items-center justify-center">
-              <img
-                src="/assets/aistudio/Orange_Cross_Heart_Medical_Icon_bd9b638a.png"
-                alt="Healno Logo"
-                className="w-full h-full object-contain"
-              />
-            </div>
+            <HealnoLogo size="md" />
             <span className="text-xl font-bold font-display tracking-tight text-[#132A1F]">
               Healno
             </span>
@@ -137,40 +133,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
 
               {/* Phone Screen Canvas */}
               <div className="bg-[#FAF8F5] rounded-[32px] overflow-hidden p-3.5 space-y-3.5 text-[#132A1F] relative">
-                {/* Mock Header with Official Logo */}
+                {/* Mock Header with Official Vector Logo */}
                 <div className="flex items-center justify-between pb-1">
                   <div className="flex items-center gap-2">
-                    <img
-                      src="/assets/aistudio/Orange_Cross_Heart_Medical_Icon_bd9b638a.png"
-                      alt="Healno"
-                      className="w-5 h-5 object-contain"
-                    />
+                    <HealnoLogo size="xs" />
                     <div>
                       <div className="text-[9px] uppercase tracking-wider text-[#132A1F]/50 font-bold">Healno</div>
-                      <div className="text-sm font-bold font-display">Hi, Jose Maria</div>
+                      <div className="text-sm font-bold font-display">Daily Dashboard</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] bg-[#FFE5D9] text-[#6B4435] px-2 py-0.5 rounded-full font-bold">
-                      🔥 5d
+                      Streak Active
                     </span>
                     <span className="text-[10px] bg-[#E8EFE9] text-[#132A1F] px-2 py-0.5 rounded-full font-bold">
-                      🥄 7/12
+                      Spoons Ready
                     </span>
                   </div>
                 </div>
 
-                {/* Sun Illustration Card */}
-                <div className="bg-[#F7C04A]/30 rounded-2xl p-2.5 border border-[#E89D35]/25">
-                  <div className="text-xs font-bold font-display">Let's start your day</div>
+                {/* Sun Illustration Card with Code-based SVG */}
+                <div className="bg-[#FFF4EB] rounded-2xl p-2.5 border border-[#FFE0C8]">
+                  <div className="text-xs font-bold font-display text-[#132A1F]">Gentle Morning Pacing</div>
                   <div className="text-[10px] text-[#132A1F]/70">Begin with mindful reflections.</div>
-                  <div className="mt-2 rounded-xl overflow-hidden h-20">
-                    <img
-                      src="/src/assets/images/healno_sun_morning_1792488330089.jpg"
-                      alt="Morning Sun"
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="mt-2 rounded-xl overflow-hidden h-24">
+                    <SunMorningIllustration className="w-full h-full" />
                   </div>
                 </div>
 
@@ -370,12 +357,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
 
       {/* Final Call to Action */}
       <section className="py-16 text-center px-4 max-w-xl mx-auto space-y-4">
-        <div className="w-12 h-12 rounded-2xl bg-white p-2 shadow-sm border border-[#132A1F]/10 mx-auto flex items-center justify-center">
-          <img
-            src="/assets/aistudio/Orange_Cross_Heart_Medical_Icon_bd9b638a.png"
-            alt="Healno"
-            className="w-full h-full object-contain"
-          />
+        <div className="flex justify-center">
+          <HealnoLogo size="lg" />
         </div>
         <h2 className="text-2xl md:text-3xl font-bold font-display text-[#132A1F]">
           Begin pacing your days with kindness.
@@ -386,7 +369,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
           <button
             onClick={() => onLaunchApp('onboarding')}
-            className="py-3.5 px-8 rounded-full bg-[#E89D35] hover:bg-[#d88d25] text-white font-bold text-sm shadow-lg shadow-[#E89D35]/25 transition-all font-display"
+            className="py-3.5 px-8 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white font-bold text-sm shadow-lg shadow-[#FF7A24]/25 transition-all font-display"
           >
             Open Healno Application
           </button>
@@ -397,11 +380,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
       <footer className="mt-auto border-t border-[#132A1F]/10 py-6 px-4 text-center text-xs text-[#132A1F]/60">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <img
-              src="/assets/aistudio/Orange_Cross_Heart_Medical_Icon_bd9b638a.png"
-              alt="Healno"
-              className="w-4 h-4 object-contain"
-            />
+            <HealnoLogo size="xs" />
             <span className="font-bold text-[#132A1F]">Healno</span>
             <span>· Supportive Health Companion</span>
           </div>
