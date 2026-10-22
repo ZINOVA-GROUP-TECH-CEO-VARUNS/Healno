@@ -12,6 +12,7 @@ import {
   CommunityPost,
   Achievement,
   MealRecipe,
+  DailyMealPlan,
   JournalEntry,
   ActivityEntry,
   JournalTask,
@@ -33,7 +34,9 @@ const STORAGE_KEYS = {
   COMMUNITY_POSTS: 'healno_community_posts',
   ACHIEVEMENTS: 'healno_achievements',
   MEALS: 'healno_meals',
+  MEAL_PLAN: 'healno_daily_meal_plan',
   ONBOARDING_PROGRESS: 'healno_onboarding_progress',
+  ONBOARDING_COMPLETED: 'healno_onboarding_completed',
 };
 
 // Initial empty user profile (never fabricated with fake data)
@@ -478,16 +481,38 @@ export const storageService = {
   getProfile: (): UserProfile => {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.PROFILE);
-      return data ? JSON.parse(data) : defaultProfile;
+      const profile: UserProfile = data ? JSON.parse(data) : { ...defaultProfile };
+      // Check persistent onboarding flag
+      const completedFlag = localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
+      if (completedFlag === 'true') {
+        profile.isOnboarded = true;
+      }
+      return profile;
     } catch {
       return defaultProfile;
     }
   },
   setProfile: (profile: UserProfile): void => {
     try {
+      if (profile.isOnboarded) {
+        localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
+      }
       localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
     } catch (e) {
       console.error(e);
+    }
+  },
+  isOnboardingCompleted: (): boolean => {
+    return localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED) === 'true';
+  },
+  setOnboardingCompleted: (completed: boolean = true): void => {
+    if (completed) {
+      localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
+      const profile = storageService.getProfile();
+      profile.isOnboarded = true;
+      localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
     }
   },
 
@@ -549,6 +574,15 @@ export const storageService = {
   deleteMedication: (id: string): void => {
     const list = storageService.getMedications().filter(m => m.id !== id);
     localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(list));
+  },
+  discontinueMedication: (id: string): void => {
+    const list = storageService.getMedications();
+    const med = list.find(m => m.id === id);
+    if (med) {
+      med.status = 'discontinued';
+      med.endDate = new Date().toISOString().split('T')[0];
+      localStorage.setItem(STORAGE_KEYS.MEDICATIONS, JSON.stringify(list));
+    }
   },
 
   getMedEvents: (): MedicationEvent[] => {
@@ -801,9 +835,54 @@ export const storageService = {
     list.unshift(entry);
     localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(list));
   },
+  updateActivity: (entry: ActivityEntry): void => {
+    const list = storageService.getActivities();
+    const idx = list.findIndex(a => a.id === entry.id);
+    if (idx >= 0) {
+      list[idx] = { ...entry, updatedAt: new Date().toISOString() };
+    } else {
+      list.unshift(entry);
+    }
+    localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(list));
+  },
+  toggleActivityComplete: (id: string): void => {
+    const list = storageService.getActivities();
+    const act = list.find(a => a.id === id);
+    if (act) {
+      act.completed = !act.completed;
+      act.updatedAt = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(list));
+    }
+  },
+  toggleActivityArchive: (id: string): void => {
+    const list = storageService.getActivities();
+    const act = list.find(a => a.id === id);
+    if (act) {
+      act.archived = !act.archived;
+      act.updatedAt = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(list));
+    }
+  },
   deleteActivity: (id: string): void => {
     const list = storageService.getActivities().filter(a => a.id !== id);
     localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(list));
+  },
+
+  // Daily Meal Plan
+  getDailyMealPlan: (): DailyMealPlan | null => {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.MEAL_PLAN);
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  },
+  saveDailyMealPlan: (plan: DailyMealPlan): void => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.MEAL_PLAN, JSON.stringify(plan));
+    } catch (e) {
+      console.error(e);
+    }
   },
 
   // Onboarding progress persistence
@@ -955,4 +1034,137 @@ export const storageService = {
   resetAllData: (): void => {
     Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
   },
+};
+
+// Common city / region to IANA Time Zone mapping
+const CITY_TIMEZONE_MAP: Record<string, string> = {
+  'new york': 'America/New_York',
+  'nyc': 'America/New_York',
+  'chicago': 'America/Chicago',
+  'los angeles': 'America/Los_Angeles',
+  'san francisco': 'America/Los_Angeles',
+  'seattle': 'America/Los_Angeles',
+  'denver': 'America/Denver',
+  'phoenix': 'America/Phoenix',
+  'dallas': 'America/Chicago',
+  'houston': 'America/Chicago',
+  'austin': 'America/Chicago',
+  'miami': 'America/New_York',
+  'atlanta': 'America/New_York',
+  'boston': 'America/New_York',
+  'toronto': 'America/Toronto',
+  'vancouver': 'America/Vancouver',
+  'london': 'Europe/London',
+  'paris': 'Europe/Paris',
+  'berlin': 'Europe/Berlin',
+  'amsterdam': 'Europe/Amsterdam',
+  'madrid': 'Europe/Madrid',
+  'rome': 'Europe/Rome',
+  'dubai': 'Asia/Dubai',
+  'mumbai': 'Asia/Kolkata',
+  'delhi': 'Asia/Kolkata',
+  'bangalore': 'Asia/Kolkata',
+  'hyderabad': 'Asia/Kolkata',
+  'chennai': 'Asia/Kolkata',
+  'kolkata': 'Asia/Kolkata',
+  'india': 'Asia/Kolkata',
+  'singapore': 'Asia/Singapore',
+  'tokyo': 'Asia/Tokyo',
+  'seoul': 'Asia/Seoul',
+  'sydney': 'Australia/Sydney',
+  'melbourne': 'Australia/Melbourne',
+  'auckland': 'Pacific/Auckland',
+};
+
+export const resolveTimeZone = (locationOrTz?: string): string => {
+  if (!locationOrTz) {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    } catch {
+      return 'UTC';
+    }
+  }
+
+  const clean = locationOrTz.trim().toLowerCase();
+  if (CITY_TIMEZONE_MAP[clean]) {
+    return CITY_TIMEZONE_MAP[clean];
+  }
+
+  // Check if any key is contained in the string (e.g. "San Francisco, CA")
+  for (const [key, tz] of Object.entries(CITY_TIMEZONE_MAP)) {
+    if (clean.includes(key)) {
+      return tz;
+    }
+  }
+
+  // Check if it's already a valid IANA timezone
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: locationOrTz });
+    return locationOrTz;
+  } catch {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    } catch {
+      return 'UTC';
+    }
+  }
+};
+
+export interface LocalGreeting {
+  greeting: string;
+  period: 'morning' | 'afternoon' | 'evening';
+  timeString: string;
+  timeZone: string;
+}
+
+export const getLocalGreeting = (location?: string, timeZone?: string, name?: string): LocalGreeting => {
+  const tz = resolveTimeZone(timeZone || location);
+  const now = new Date();
+
+  let hour = now.getHours();
+  let timeString = '';
+
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+    timeString = formatter.format(now);
+
+    const hourFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hour: 'numeric',
+      hour12: false,
+    });
+    hour = parseInt(hourFormatter.format(now), 10);
+  } catch {
+    hour = now.getHours();
+    timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  let period: 'morning' | 'afternoon' | 'evening' = 'morning';
+  let greeting = 'Good Morning';
+
+  if (hour >= 5 && hour < 12) {
+    period = 'morning';
+    greeting = 'Good Morning';
+  } else if (hour >= 12 && hour < 17) {
+    period = 'afternoon';
+    greeting = 'Good Afternoon';
+  } else {
+    period = 'evening';
+    greeting = 'Good Evening';
+  }
+
+  const trimmedName = name?.trim();
+  const fullGreeting = trimmedName ? `${greeting}, ${trimmedName}` : greeting;
+
+  return {
+    greeting: fullGreeting,
+    period,
+    timeString,
+    timeZone: tz,
+  };
 };

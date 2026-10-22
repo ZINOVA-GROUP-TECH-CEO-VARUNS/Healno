@@ -11,6 +11,8 @@ import {
   Appointment,
   CommunityPost,
   JournalEntry,
+  ActivityEntry,
+  DailyMealPlan,
 } from '../types';
 
 export const dbService = {
@@ -420,13 +422,53 @@ export const dbService = {
   },
 
   // Daily Activity Tracker
-  getActivities: async () => {
+  getActivities: async (): Promise<ActivityEntry[]> => {
     return storageService.getActivities();
   },
-  addActivity: async (entry: any) => {
+  addActivity: async (entry: ActivityEntry): Promise<void> => {
     storageService.addActivity(entry);
   },
-  deleteActivity: async (id: string) => {
+  updateActivity: async (entry: ActivityEntry): Promise<void> => {
+    storageService.updateActivity(entry);
+  },
+  toggleActivityComplete: async (id: string): Promise<void> => {
+    storageService.toggleActivityComplete(id);
+  },
+  toggleActivityArchive: async (id: string): Promise<void> => {
+    storageService.toggleActivityArchive(id);
+  },
+  deleteActivity: async (id: string): Promise<void> => {
     storageService.deleteActivity(id);
   },
+
+  // Appointments
+  getAppointments: async (): Promise<Appointment[]> => {
+    return storageService.getAppointments();
+  },
+  saveAppointment: async (apt: Appointment): Promise<void> => {
+    storageService.saveAppointment(apt);
+  },
+  deleteAppointment: async (id: string): Promise<void> => {
+    storageService.deleteAppointment(id);
+  },
+
+  // Medical Documents
+  getDocuments: async (): Promise<MedicalDocument[]> => {
+    return storageService.getDocuments();
+  },
+  saveDocument: async (doc: MedicalDocument): Promise<void> => {
+    storageService.saveDocument(doc);
+  },
+  deleteDocument: async (id: string): Promise<void> => {
+    storageService.deleteDocument(id);
+  },
+
+  // Daily Meal Plan
+  getDailyMealPlan: async (): Promise<DailyMealPlan | null> => {
+    return storageService.getDailyMealPlan();
+  },
+  saveDailyMealPlan: async (plan: DailyMealPlan): Promise<void> => {
+    storageService.saveDailyMealPlan(plan);
+  },
 };
+

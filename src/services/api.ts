@@ -121,6 +121,128 @@ export const apiService = {
     }
   },
 
+  askDocumentQA: async (question: string, document: any, userProfile?: any) => {
+    try {
+      const response = await fetch('/api/document-qa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, document, userProfile }),
+      });
+      if (!response.ok) {
+        throw new Error(`Document Q&A responded with ${response.status}`);
+      }
+      return await response.json();
+    } catch (err) {
+      console.warn('Document Q&A fallback', err);
+      return {
+        answer: `Regarding "${question}": Your ${document?.documentType || 'document'} records key details including: ${(document?.keyFindings || []).join('; ') || 'Results noted'}. Discuss these values with your healthcare provider to understand their clinical meaning.`,
+        extractedFacts: document?.keyFindings || [],
+        aiInterpretation: "Educational context provided. Verify specific interpretations with your clinician.",
+        doctorQuestions: document?.suggestedDoctorQuestions || ["How do these findings impact my current care plan?"]
+      };
+    }
+  },
+
+  generateDailyMealPlan: async (
+    energyLevelOrProfile: number | UserProfile,
+    dietaryPreferences?: string[] | number,
+    allergies?: string[],
+    conditions?: string[]
+  ) => {
+    let energyLevel = 5;
+    let prefs: string[] = [];
+    let allergyList: string[] = [];
+    let conditionList: string[] = [];
+
+    if (typeof energyLevelOrProfile === 'object' && energyLevelOrProfile !== null) {
+      const p = energyLevelOrProfile as UserProfile;
+      energyLevel = typeof dietaryPreferences === 'number' ? dietaryPreferences : 5;
+      prefs = p.dietaryPreferences || [];
+      allergyList = p.allergies || [];
+      conditionList = p.conditions || [];
+    } else {
+      energyLevel = typeof energyLevelOrProfile === 'number' ? energyLevelOrProfile : 5;
+      prefs = Array.isArray(dietaryPreferences) ? dietaryPreferences : [];
+      allergyList = allergies || [];
+      conditionList = conditions || [];
+    }
+
+    try {
+      const response = await fetch('/api/daily-meal-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ energyLevel, dietaryPreferences: prefs, allergies: allergyList, conditions: conditionList }),
+      });
+      if (!response.ok) {
+        throw new Error(`Daily meal plan API responded with ${response.status}`);
+      }
+      return await response.json();
+    } catch (err) {
+      console.warn('Daily meal plan fallback', err);
+      return {
+        id: `plan_${Date.now()}`,
+        date: new Date().toISOString().split('T')[0],
+        breakfast: {
+          id: `bf_${Date.now()}`,
+          name: 'Golden Turmeric Oatmeal with Blueberries',
+          mealType: 'breakfast',
+          spoonCost: 1,
+          prepTimeMinutes: 8,
+          difficulty: 'Low Effort',
+          dietaryTags: ['Anti-inflammatory', 'Soothing'],
+          ingredients: ['Rolled oats', 'Almond or oat milk', 'Ground turmeric', 'Blueberries', 'Honey or maple'],
+          instructions: ['Cook oats gently with milk and turmeric', 'Stir in sweetener', 'Top with blueberries'],
+          lowEffortAlternative: 'Instant oatmeal packet with warm milk.',
+          nutritionNotes: 'Calming to the gut and rich in antioxidants.',
+          storageGuidance: 'Serve warm.'
+        },
+        lunch: {
+          id: `lu_${Date.now()}`,
+          name: 'Gentle Ginger Miso Rice Bowl',
+          mealType: 'lunch',
+          spoonCost: 1,
+          prepTimeMinutes: 10,
+          difficulty: 'Low Effort',
+          dietaryTags: ['Hydrating', 'Low Effort'],
+          ingredients: ['Sweet white miso', 'Warm broth', 'Pre-cooked rice', 'Baby spinach'],
+          instructions: ['Dissolve miso in warm broth', 'Fold in warm rice and spinach', 'Rest 1 min'],
+          lowEffortAlternative: 'Miso sipping soup with crackers.',
+          nutritionNotes: 'Electrolytes and easily digested carbs.',
+          storageGuidance: 'Fresh.'
+        },
+        dinner: {
+          id: `di_${Date.now()}`,
+          name: 'Warm Sweet Potato & Lentil Stew',
+          mealType: 'dinner',
+          spoonCost: 1,
+          prepTimeMinutes: 15,
+          difficulty: 'Low Effort',
+          dietaryTags: ['Nourishing', 'Fiber-Rich'],
+          ingredients: ['Cooked lentils', 'Coconut milk', 'Roasted sweet potato cubes', 'Mild spices'],
+          instructions: ['Heat lentils and sweet potato in coconut milk', 'Simmer 10 mins', 'Serve warm'],
+          lowEffortAlternative: 'Canned organic lentil soup.',
+          nutritionNotes: 'Potassium and steady complex carbs.',
+          storageGuidance: 'Keeps 3 days.'
+        },
+        snack: {
+          id: `sn_${Date.now()}`,
+          name: 'Coconut Hydration Chia Cup',
+          mealType: 'snack',
+          spoonCost: 1,
+          prepTimeMinutes: 3,
+          difficulty: 'Low Effort',
+          dietaryTags: ['Hydrating'],
+          ingredients: ['Chia seeds', 'Coconut water', 'Pumpkin seeds'],
+          instructions: ['Stir chia into coconut water', 'Rest 5 minutes', 'Top with seeds'],
+          lowEffortAlternative: 'Salted pumpkin seeds.',
+          nutritionNotes: 'Supports autonomic hydration balance.',
+          storageGuidance: 'Chilled.'
+        },
+        dietaryNotes: 'Designed for energy preservation and anti-inflammatory support.'
+      };
+    }
+  },
+
   // Speech Synthesis (TTS) Helper
   speakText: (text: string, onEnd?: () => void) => {
     if ('speechSynthesis' in window) {

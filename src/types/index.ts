@@ -6,6 +6,8 @@ export interface UserProfile {
   dob?: string;
   age?: number;
   gender?: string;
+  location?: string; // City or Location for personalized timezone greeting
+  timeZone?: string; // IANA timezone e.g. America/New_York
   conditions: string[];
   commonSymptoms: string[];
   currentMedicationsSummary?: string;
@@ -38,13 +40,16 @@ export interface SymptomLog {
   id: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
-  category: 'fatigue' | 'pain' | 'sleep' | 'mood' | 'brain_fog' | 'digestive' | 'custom';
+  category: 'fatigue' | 'pain' | 'sleep' | 'mood' | 'brain_fog' | 'digestive' | 'custom' | 'condition';
   name: string;
   intensity: number; // 1 to 10
   notes: string;
   tags: string[];
   triggers: string[];
   restPeriods?: string;
+  isCondition?: boolean; // Distinguishes chronic disorders/diagnosed conditions from acute daily symptoms
+  diagnosedDate?: string;
+  status?: 'active' | 'managed' | 'resolved';
 }
 
 export interface EmotionScore {
@@ -73,8 +78,13 @@ export interface Medication {
   id: string;
   name: string;
   dosage: string;
-  scheduleTimes: string[]; // e.g. ["08:00", "20:00"]
+  frequency?: string; // e.g. "Once daily", "Twice daily", "Every 8 hours", "As needed"
+  startDate?: string;
+  endDate?: string;
+  associatedCondition?: string; // linked symptom or medical condition
+  status?: 'active' | 'discontinued' | 'completed';
   timeSlot: 'Morning' | 'Afternoon' | 'Evening' | 'Bedtime' | 'As Needed';
+  scheduleTimes: string[]; // e.g. ["08:00", "20:00"]
   instructions: string;
   isAsNeeded: boolean;
   refillDate?: string;
@@ -82,6 +92,8 @@ export interface Medication {
   refillReminder?: boolean;
   prescriber?: string;
   category: 'Prescription' | 'Supplement' | 'OTC';
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface MedicationEvent {
@@ -124,8 +136,14 @@ export interface ActivityEntry {
   date: string;
   time?: string;
   durationMinutes?: number;
+  quantity?: number; // Numerical progress/measurement
+  unit?: string; // e.g. "steps", "mins", "glasses", "reps", "pages", "hours"
+  target?: number; // Target quantity
+  completed?: boolean;
+  archived?: boolean; // Active vs Archived completion status
   notes?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface MedicalDocument {
@@ -136,27 +154,36 @@ export interface MedicalDocument {
   date: string;
   fileName: string;
   fileSize?: string;
+  fileUrl?: string; // Stored base64 Data URL or safe local/remote URL for preview and download
+  mimeType?: string;
+  associatedEvent?: string; // Link to specific appointment or symptom episode
   keyFindings: string[];
   plainLanguageSummary: string;
   suggestedDoctorQuestions: string[];
   unverified: boolean; // Must be unverified until user confirms
   connectedSymptoms?: string[];
   userNotes?: string;
+  createdAt?: string;
 }
 
 export interface Appointment {
   id: string;
-  provider: string;
+  provider: string; // Doctor name or clinic
+  doctorName?: string; // Specific doctor name
   specialty: string;
-  location: string;
+  location: string; // Clinic or Hospital name / address
   date: string;
   time: string;
   purpose: string;
   reminderSet: boolean;
   completed: boolean;
+  isRescheduled?: boolean;
+  isCancelled?: boolean;
   doctorQuestions: string[];
   talkingPoints: string[];
   clinicalNotes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CareProvider {
@@ -236,6 +263,7 @@ export interface Achievement {
 export interface MealRecipe {
   id: string;
   name: string;
+  mealType?: 'breakfast' | 'lunch' | 'dinner' | 'snack';
   imageUrl?: string;
   spoonCost: number; // 1 = Low Effort, 2 = Balanced, 3 = High Energy
   prepTimeMinutes: number;
@@ -248,11 +276,27 @@ export interface MealRecipe {
   storageGuidance: string;
 }
 
+export interface DailyMealPlan {
+  id: string;
+  date: string;
+  breakfast: MealRecipe;
+  lunch: MealRecipe;
+  dinner: MealRecipe;
+  snack?: MealRecipe;
+  dietaryNotes?: string;
+  generatedAt: string;
+}
+
 export interface AIChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  attachedDocument?: {
+    name: string;
+    type: string;
+    summary?: string;
+  };
   suggestedAction?: {
     type: 'log_symptom' | 'log_medication' | 'pacing_tip';
     title: string;

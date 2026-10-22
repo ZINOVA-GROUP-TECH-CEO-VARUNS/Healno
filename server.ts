@@ -307,6 +307,191 @@ recipeName, prepTimeMinutes, energySpoonCost (1 to 3), difficulty ("Low Effort" 
   }
 });
 
+// Document Q&A Assistant Endpoint
+app.post('/api/document-qa', async (req, res) => {
+  try {
+    const { question, document, userProfile } = req.body;
+
+    if (!ai) {
+      return res.json({
+        answer: `Based on your ${document?.documentType || 'medical document'} (${document?.title || 'Report'}), here is a plain-language summary of what is noted:\n\n• Key Finding: ${(document?.keyFindings || []).join('; ') || 'Standard values recorded'}\n\n• Plain Language Explanation: ${document?.plainLanguageSummary || 'Your report shows general parameters for discussion with your care provider.'}\n\nRegarding your question "${question}": Note that while this document provides specific measurements, a licensed clinician must interpret how they fit your symptoms.`,
+        extractedFacts: document?.keyFindings || [],
+        aiInterpretation: "This interpretation is for patient education and preparation. Always consult your provider before making changes.",
+        doctorQuestions: document?.suggestedDoctorQuestions || [
+          "How do these findings impact my daily energy management?",
+          "Should we recheck these values in 3 to 6 months?"
+        ]
+      });
+    }
+
+    const prompt = `You are Healno's AI Medical Document Assistant. The patient is asking a question about their uploaded medical document.
+
+Document Details:
+- Title: ${document?.title || 'Medical Report'}
+- Type: ${document?.documentType || 'Lab / Clinical Report'}
+- Provider: ${document?.provider || 'Healthcare Provider'}
+- Date: ${document?.date || 'Recent'}
+- Key Findings Extracted: ${JSON.stringify(document?.keyFindings || [])}
+- Plain Language Summary: ${document?.plainLanguageSummary || ''}
+- Additional Document Notes: ${document?.userNotes || ''}
+
+Patient Context (Authorized):
+- Name: ${userProfile?.name || 'Friend'}
+- Known Conditions: ${(userProfile?.conditions || []).join(', ') || 'None specified'}
+
+Patient Question: "${question}"
+
+Instructions:
+1. Explain medical terminology in simple, calm, accessible terms.
+2. Clearly distinguish information directly stated in the document from AI-generated general educational interpretations.
+3. If the answer cannot be determined from the document, clearly say so without guessing or fabricating values.
+4. Do NOT diagnose, declare new conditions, or suggest altering prescription dosages.
+5. Provide 2-3 empowering questions the patient can ask their physician.
+
+Format as JSON:
+{
+  "answer": "Clear, gentle, supportive answer in 2-3 paragraphs",
+  "extractedFacts": ["Fact 1 directly from report", "Fact 2 directly from report"],
+  "aiInterpretation": "General educational explanation distinguishing facts from general knowledge",
+  "doctorQuestions": ["Question 1", "Question 2"]
+}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+      },
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    res.json(parsed);
+  } catch (error: any) {
+    console.error('Error in /api/document-qa:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Daily Meal Plan Generator (Breakfast, Lunch, Dinner, Snack)
+app.post('/api/daily-meal-plan', async (req, res) => {
+  try {
+    const { energyLevel, dietaryPreferences, allergies, conditions } = req.body;
+
+    if (!ai) {
+      const isLow = (energyLevel ?? 6) <= 4;
+      return res.json({
+        id: `plan_${Date.now()}`,
+        date: new Date().toISOString().split('T')[0],
+        breakfast: {
+          id: `bf_${Date.now()}`,
+          name: 'Warm Turmeric Golden Oat Porridge with Blueberries',
+          mealType: 'breakfast',
+          spoonCost: 1,
+          prepTimeMinutes: 8,
+          difficulty: 'Low Effort',
+          dietaryTags: ['Anti-inflammatory', 'Gluten-Free', 'Soothing'],
+          ingredients: ['Gluten-free oats', 'Warm oat or almond milk', 'Pinch turmeric & cinnamon', 'Wild blueberries', 'Drizzle maple syrup'],
+          instructions: ['Simmer oats in warm milk with spices for 5 mins', 'Stir in maple syrup', 'Top with fresh or thawed berries'],
+          lowEffortAlternative: 'Instant microwave oat packet with warm plant milk and dash of cinnamon.',
+          nutritionNotes: 'Polyphenol-rich and calming to digestion.',
+          storageGuidance: 'Enjoy warm and fresh.'
+        },
+        lunch: {
+          id: `lu_${Date.now()}`,
+          name: '10-Minute Ginger Miso Broth with Steamed Greens & Rice',
+          mealType: 'lunch',
+          spoonCost: 1,
+          prepTimeMinutes: 10,
+          difficulty: 'Low Effort',
+          dietaryTags: ['Gut-Friendly', 'Hydrating', 'Low Spoon'],
+          ingredients: ['1 tbsp sweet white miso paste', 'Pre-cooked brown or jasmine rice', 'Warm vegetable broth', 'Handful baby spinach', 'Sesame oil'],
+          instructions: ['Whisk miso into warm broth', 'Add pre-cooked rice and spinach', 'Rest 1 minute until wilted'],
+          lowEffortAlternative: 'Store-bought sipping broth with gluten-free crackers.',
+          nutritionNotes: 'Easily digestible carbohydrates with gut-supportive probiotics.',
+          storageGuidance: 'Best consumed immediately.'
+        },
+        dinner: {
+          id: `di_${Date.now()}`,
+          name: isLow ? 'One-Pot Coconut Vegetable Lentil Stew' : 'Nourish Bowl with Roasted Sweet Potatoes & Tahini',
+          mealType: 'dinner',
+          spoonCost: isLow ? 1 : 2,
+          prepTimeMinutes: isLow ? 12 : 25,
+          difficulty: isLow ? 'Low Effort' : 'Moderate',
+          dietaryTags: ['Anti-inflammatory', 'Fiber-Rich', 'Dairy-Free'],
+          ingredients: ['Canned red lentils or chickpeas', 'Coconut milk', 'Mild curry or cumin', 'Cubed zucchini or sweet potato', 'Steamed rice'],
+          instructions: ['Warm lentils and vegetables in coconut milk', 'Simmer until tender', 'Serve over warm rice'],
+          lowEffortAlternative: 'Canned organic lentil soup with warm avocado toast.',
+          nutritionNotes: 'Steady potassium and healthy fats for sustained autonomic stability.',
+          storageGuidance: 'Refrigerate in sealed container up to 3 days.'
+        },
+        snack: {
+          id: `sn_${Date.now()}`,
+          name: 'Electrolyte Chia & Coconut Seed Cup',
+          mealType: 'snack',
+          spoonCost: 1,
+          prepTimeMinutes: 3,
+          difficulty: 'Low Effort',
+          dietaryTags: ['Hydration', 'Mineral-Rich'],
+          ingredients: ['Chia seeds', 'Coconut water or almond yogurt', 'Pumpkin seeds', 'Pinch sea salt'],
+          instructions: ['Stir chia into coconut water or yogurt', 'Let sit 5 minutes', 'Top with seeds'],
+          lowEffortAlternative: 'Handful of salted pumpkin seeds and electrolyte water.',
+          nutritionNotes: 'Sustained bioavailable minerals to support hydration.',
+          storageGuidance: 'Keep chilled.'
+        },
+        dietaryNotes: 'Tailored to support steady glucose, minimal digestion effort, and balanced energy pacing without inflammatory triggers.'
+      });
+    }
+
+    const prompt = `Generate a complete, supportive, 1-day personalized meal plan (Breakfast, Lunch, Dinner, and an optional Snack) for a person managing chronic health conditions.
+
+Patient Health Profile:
+- Known Health Conditions: ${(conditions || []).join(', ') || 'Chronic fatigue / energy pacing'}
+- Dietary Preferences: ${(dietaryPreferences || []).join(', ') || 'Wholesome balanced'}
+- Known Allergies to STRICTLY AVOID: ${(allergies || []).join(', ') || 'None reported'}
+- Current Energy / Spoon Level: ${energyLevel ?? 6} / 10 (${(energyLevel ?? 6) <= 4 ? 'Low energy day: prioritize zero-effort prep, minimal standing, 1-pot or no-cook meals' : 'Moderate energy day: balanced prep under 25 minutes'})
+
+Strict Requirements:
+1. NEVER include ingredients from the user's known allergies: ${(allergies || []).join(', ') || 'None'}.
+2. Keep instructions simple, clear, and realistic for someone experiencing fatigue.
+3. Return pure JSON with the schema:
+{
+  "id": "plan_string",
+  "date": "YYYY-MM-DD",
+  "breakfast": {
+    "id": "bf_1", "name": "Name", "mealType": "breakfast", "spoonCost": 1, "prepTimeMinutes": 8, "difficulty": "Low Effort",
+    "dietaryTags": ["Tag"], "ingredients": ["Item 1"], "instructions": ["Step 1"], "lowEffortAlternative": "Alternative", "nutritionNotes": "Notes", "storageGuidance": "Guidance"
+  },
+  "lunch": {
+    "id": "lu_1", "name": "Name", "mealType": "lunch", "spoonCost": 1, "prepTimeMinutes": 10, "difficulty": "Low Effort",
+    "dietaryTags": ["Tag"], "ingredients": ["Item 1"], "instructions": ["Step 1"], "lowEffortAlternative": "Alternative", "nutritionNotes": "Notes", "storageGuidance": "Guidance"
+  },
+  "dinner": {
+    "id": "di_1", "name": "Name", "mealType": "dinner", "spoonCost": 2, "prepTimeMinutes": 20, "difficulty": "Moderate",
+    "dietaryTags": ["Tag"], "ingredients": ["Item 1"], "instructions": ["Step 1"], "lowEffortAlternative": "Alternative", "nutritionNotes": "Notes", "storageGuidance": "Guidance"
+  },
+  "snack": {
+    "id": "sn_1", "name": "Name", "mealType": "snack", "spoonCost": 1, "prepTimeMinutes": 3, "difficulty": "Low Effort",
+    "dietaryTags": ["Tag"], "ingredients": ["Item 1"], "instructions": ["Step 1"], "lowEffortAlternative": "Alternative", "nutritionNotes": "Notes", "storageGuidance": "Guidance"
+  },
+  "dietaryNotes": "Summary explanation of how this plan supports their pacing"
+}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+      },
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    res.json(parsed);
+  } catch (error: any) {
+    console.error('Error in /api/daily-meal-plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Setup Vite middleware in dev or static files in production
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';

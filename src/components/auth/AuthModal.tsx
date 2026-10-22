@@ -43,9 +43,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
     setErrorMsg('');
+    const userEmail = email.trim() || 'thexplorervaruns@gmail.com';
+    const rawName = userEmail.split('@')[0].replace(/[._]/g, ' ');
+    const computedName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
     onLoginSuccess({
-      email,
-      name: email.split('@')[0].replace('.', ' '),
+      email: userEmail,
+      name: computedName,
       isAuthenticated: true,
     });
     onClose();
@@ -64,7 +67,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
     onLoginSuccess({
       phone,
-      name: 'Jose Maria',
+      name: 'Varun',
+      email: 'thexplorervaruns@gmail.com',
       isAuthenticated: true,
     });
     onClose();
@@ -72,12 +76,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleSocialLogin = (provider: 'Google' | 'Apple') => {
     onLoginSuccess({
-      name: provider === 'Google' ? 'Jose Maria' : 'Healno Explorer',
-      email: `${provider.toLowerCase()}@healno.app`,
+      name: 'Varun',
+      email: 'thexplorervaruns@gmail.com',
       isAuthenticated: true,
     });
     onClose();
   };
+
 
   return (
     <div className="fixed inset-0 z-50 bg-[#132A1F]/80 backdrop-blur-md flex items-center justify-center p-4">

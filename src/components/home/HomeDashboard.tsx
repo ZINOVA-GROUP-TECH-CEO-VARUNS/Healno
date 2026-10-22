@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   UserProfile,
   SymptomLog,
@@ -26,8 +26,13 @@ import {
   FileText,
   Activity,
   Heart,
+  Pill,
+  Target,
+  ArrowRight,
+  MapPin,
 } from 'lucide-react';
 import { SunMorningIllustration, EmptyStateIllustration } from '../common/CodeIllustrations';
+import { storageService, getLocalGreeting } from '../../services/storage';
 
 interface HomeDashboardProps {
   profile: UserProfile;
@@ -53,7 +58,7 @@ interface HomeDashboardProps {
   onOpenMeals?: () => void;
   onOpenLessons?: () => void;
   onOpenDocuments?: () => void;
-  onOpenCareFinder?: () => void;
+  onOpenAppointments?: () => void;
 }
 
 export const HomeDashboard: React.FC<HomeDashboardProps> = ({
@@ -77,17 +82,52 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   onOpenSymptoms = () => onNavigateTab('symptoms'),
   onOpenMyths = () => onNavigateTab('myths'),
   onOpenSpace = () => onNavigateTab('space'),
-  onOpenMeals,
+  onOpenMeals = () => onNavigateTab('meals'),
   onOpenLessons,
-  onOpenDocuments,
-  onOpenCareFinder,
+  onOpenDocuments = () => onNavigateTab('profile'),
+  onOpenAppointments = () => onNavigateTab('appointments'),
 }) => {
   const effectiveTasks = tasks || pacingTasks || [];
   const todayStr = new Date().toISOString().split('T')[0];
-  const upcomingAppointment = appointments.find((a) => !a.completed);
+
+  const displayName = profile.name?.trim() ? profile.name.split(' ')[0] : 'Friend';
+  const dailyCapacity = profile.dailySpoonsCapacity || 12;
+
+  // Real local timezone greeting
+  const localGreeting = useMemo(() => {
+    return getLocalGreeting(profile.location, profile.timeZone, displayName);
+  }, [profile.location, profile.timeZone, displayName]);
+
+  // Saved documents
+  const documents = useMemo(() => {
+    return storageService.getDocuments();
+  }, []);
+  const recentReport = documents[0] || null;
+
+  // Saved daily meal plan
+  const dailyMealPlan = useMemo(() => {
+    return storageService.getDailyMealPlan();
+  }, []);
+
+  // Saved activities
+  const activities = useMemo(() => {
+    return storageService.getActivities();
+  }, []);
+  const activeActivities = activities.filter((a) => !a.archived);
+  const completedActivitiesToday = activeActivities.filter((a) => a.completed);
+
+  // Active medications
+  const activeMeds = medications.filter((m) => m.status !== 'discontinued');
+
+  // Next upcoming doctor appointment
+  const upcomingAppointment = useMemo(() => {
+    return appointments
+      .filter((a) => !a.isCancelled && !a.completed && a.date >= todayStr)
+      .sort((a, b) => (a.date > b.date ? 1 : -1))[0] || null;
+  }, [appointments, todayStr]);
 
   // Today's pending or upcoming medications from real saved records
-  const todayMeds = medications.slice(0, 3).map((med) => {
+  const todayMeds = activeMeds.slice(0, 3).map((med) => {
     const event = medEvents.find(
       (e) => e.medicationId === med.id && e.date === todayStr
     );
@@ -97,17 +137,19 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     };
   });
 
-  const displayName = profile.name?.trim() ? profile.name.split(' ')[0] : 'Friend';
-  const dailyCapacity = profile.dailySpoonsCapacity || 12;
-
   return (
     <div className="pb-28 pt-2 px-4 max-w-xl mx-auto space-y-5 animate-in fade-in duration-300">
-      {/* Supportive Greeting & Spoons Capacity Hero Bar */}
+      {/* Dynamic Greeting & Spoons Capacity Hero Bar */}
       <div className="bg-[#132A1F] text-white rounded-3xl p-5 shadow-md relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold text-[#B7E4C7] uppercase tracking-wider">
-              Today's Energy Balance
+            <span className="text-[11px] font-bold text-[#FF7A24] uppercase tracking-wider flex items-center gap-1.5">
+              <span>{localGreeting.greeting}</span>
+              {profile.location && (
+                <span className="text-[#B7E4C7] font-normal lowercase">
+                  · {profile.location} ({localGreeting.timeString})
+                </span>
+              )}
             </span>
             <span className="text-xs text-[#B7E4C7]/90 font-medium">
               {profile.streakDays > 0 ? `${profile.streakDays} Day Continuous Streak` : 'Today is Day 1'}
@@ -128,10 +170,10 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             </div>
 
             <button
-              onClick={() => onNavigateTab('space')}
+              onClick={onOpenSpace}
               className="text-xs bg-[#FF7A24] hover:bg-[#d86214] text-white font-bold px-3.5 py-1.5 rounded-full transition-all shadow-xs flex items-center gap-1 active:scale-95"
             >
-              <span>Activity Tracker</span>
+              <span>Activity Space</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -147,87 +189,255 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           </div>
         </div>
 
-        {/* Subtle decorative background shapes */}
-        <div className="absolute -right-8 -bottom-8 w-32 h-32 rounded-full bg-[#2D6A4F]/30 blur-2xl pointer-events-none" />
+        {/* Decorative background shape */}
+        <div className="absolute -right-8 -bottom-8 w-32 h-32 rounded-full bg-[#FF7A24]/15 blur-2xl pointer-events-none" />
       </div>
 
-      {/* Hero "My Journal / Daily Flow" Cards with upright, readable layouts */}
-      <div>
-        <div className="flex items-center justify-between mb-2.5 px-1">
-          <div className="flex items-center gap-1.5">
-            <h2 className="text-base font-bold font-display text-[#132A1F]">My Journal</h2>
-            <span className="text-[10px] bg-[#FFF4EB] text-[#FF7A24] border border-[#FF7A24]/20 px-2 py-0.5 rounded-full font-bold">
-              Diary & Tasks
-            </span>
-          </div>
-          <button
-            onClick={onOpenJournal}
-            className="text-xs bg-[#FF7A24] hover:bg-[#d86214] text-white font-bold px-3 py-1 rounded-full shadow-xs transition-all flex items-center gap-1 active:scale-95"
-          >
-            <span>Open Diary</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
+      {/* ================= CLINICAL & DATA SUMMARIES (CLICKABLE) ================= */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-sm font-bold text-[#132A1F] uppercase tracking-wider">
+            Health Status & Records
+          </h2>
+          <span className="text-[11px] text-[#132A1F]/50">Click any card to manage</span>
         </div>
 
-        {/* Grid with Code-Based Sun Illustration & Clean Upright Evening Card */}
-        <div className="grid grid-cols-12 gap-3 items-stretch">
-          {/* Main Card with Sun Illustration (Code-Based SVG) */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Card 1: Upcoming Appointments */}
           <div
-            onClick={onOpenJournal}
-            className="col-span-8 bg-[#FFF8E7] rounded-3xl p-4 cursor-pointer relative overflow-hidden border border-[#FF7A24]/20 hover:shadow-md transition-all group"
-          >
-            <div className="relative z-10 max-w-[200px]">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-[#FF7A24]">
-                Morning
-              </span>
-              <h3 className="text-base font-bold text-[#132A1F] font-display leading-tight mt-0.5 mb-1">
-                Let's start your day
-              </h3>
-              <p className="text-xs text-[#132A1F]/80 leading-relaxed">
-                Reflect on your energy and write your morning thoughts.
-              </p>
-            </div>
-
-            {/* Code-Based Sun Morning Illustration */}
-            <div className="mt-2 rounded-2xl overflow-hidden h-28 relative shadow-xs border border-[#FF7A24]/10">
-              <SunMorningIllustration className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-            </div>
-          </div>
-
-          {/* Upright, readable Evening Card (Fixed Layout: upright text, proper order) */}
-          <div
-            onClick={onOpenJournal}
-            className="col-span-4 bg-[#F2EDE4] rounded-3xl p-4 flex flex-col justify-between cursor-pointer hover:bg-[#eae4da] transition-all border border-[#132A1F]/10 group"
+            onClick={onOpenAppointments}
+            className="bg-white rounded-2xl p-3.5 border border-[#132A1F]/10 hover:border-[#FF7A24]/40 cursor-pointer transition-all shadow-xs flex flex-col justify-between group"
           >
             <div>
-              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-base mb-2 shadow-xs group-hover:scale-110 transition-transform">
-                🌙
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold text-[#FF7A24] uppercase tracking-wider flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  <span>Next Visit</span>
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-[#132A1F]/30 group-hover:text-[#FF7A24] transition-colors" />
               </div>
-              <span className="text-[10px] uppercase font-bold tracking-wider text-[#132A1F]/60 block">
-                Evening
-              </span>
-              <h4 className="text-sm font-bold text-[#132A1F] font-display leading-tight mt-0.5">
-                Wind Down & Rest
-              </h4>
+
+              {upcomingAppointment ? (
+                <div>
+                  <h4 className="text-xs font-bold text-[#132A1F] truncate">
+                    {upcomingAppointment.doctorName || upcomingAppointment.provider}
+                  </h4>
+                  <p className="text-[10px] text-[#132A1F]/60 mt-0.5 truncate">
+                    {upcomingAppointment.date} · {upcomingAppointment.time}
+                  </p>
+                  <p className="text-[10px] text-[#132A1F]/50 truncate mt-0.5">
+                    {upcomingAppointment.specialty}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <h4 className="text-xs font-bold text-[#132A1F]">No visits booked</h4>
+                  <p className="text-[10px] text-[#132A1F]/50 mt-0.5">Tap to schedule visit</p>
+                </div>
+              )}
+            </div>
+            <span className="text-[10px] font-bold text-[#FF7A24] mt-2 group-hover:underline">
+              {upcomingAppointment ? 'View Brief →' : 'Schedule →'}
+            </span>
+          </div>
+
+          {/* Card 2: Recent Medical Reports */}
+          <div
+            onClick={onOpenDocuments}
+            className="bg-white rounded-2xl p-3.5 border border-[#132A1F]/10 hover:border-[#FF7A24]/40 cursor-pointer transition-all shadow-xs flex flex-col justify-between group"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider flex items-center gap-1">
+                  <FileText className="w-3 h-3" />
+                  <span>Lab Reports</span>
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-[#132A1F]/30 group-hover:text-blue-600 transition-colors" />
+              </div>
+
+              {recentReport ? (
+                <div>
+                  <h4 className="text-xs font-bold text-[#132A1F] truncate">
+                    {recentReport.title}
+                  </h4>
+                  <p className="text-[10px] text-[#132A1F]/60 mt-0.5 truncate">
+                    {recentReport.date} · {recentReport.documentType}
+                  </p>
+                  <p className="text-[10px] text-[#2D6A4F] truncate mt-0.5 font-medium">
+                    {recentReport.keyFindings?.length || 0} Key findings identified
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <h4 className="text-xs font-bold text-[#132A1F]">No reports filed</h4>
+                  <p className="text-[10px] text-[#132A1F]/50 mt-0.5">Upload test or scan</p>
+                </div>
+              )}
+            </div>
+            <span className="text-[10px] font-bold text-blue-600 mt-2 group-hover:underline">
+              {recentReport ? 'Review Records →' : 'Upload →'}
+            </span>
+          </div>
+
+          {/* Card 3: Active Medications */}
+          <div
+            onClick={onOpenSymptoms}
+            className="bg-white rounded-2xl p-3.5 border border-[#132A1F]/10 hover:border-[#FF7A24]/40 cursor-pointer transition-all shadow-xs flex flex-col justify-between group"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider flex items-center gap-1">
+                  <Pill className="w-3 h-3" />
+                  <span>Active Medicines</span>
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-[#132A1F]/30 group-hover:text-purple-600 transition-colors" />
+              </div>
+
+              <div>
+                <h4 className="text-xs font-bold text-[#132A1F]">
+                  {activeMeds.length} Active Prescriptions
+                </h4>
+                {activeMeds.length > 0 ? (
+                  <p className="text-[10px] text-[#132A1F]/60 mt-0.5 truncate">
+                    Next: {activeMeds[0].name} ({activeMeds[0].dosage})
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-[#132A1F]/50 mt-0.5">Add current medications</p>
+                )}
+              </div>
+            </div>
+            <span className="text-[10px] font-bold text-purple-600 mt-2 group-hover:underline">
+              Manage Medicines →
+            </span>
+          </div>
+
+          {/* Card 4: Activity Completion Progress */}
+          <div
+            onClick={onOpenSpace}
+            className="bg-white rounded-2xl p-3.5 border border-[#132A1F]/10 hover:border-[#FF7A24]/40 cursor-pointer transition-all shadow-xs flex flex-col justify-between group"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold text-[#2D6A4F] uppercase tracking-wider flex items-center gap-1">
+                  <Target className="w-3 h-3" />
+                  <span>Activity Progress</span>
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-[#132A1F]/30 group-hover:text-[#2D6A4F] transition-colors" />
+              </div>
+
+              <div>
+                <h4 className="text-xs font-bold text-[#132A1F]">
+                  {completedActivitiesToday.length} of {activeActivities.length} Done
+                </h4>
+                <div className="w-full bg-[#F1EFE9] rounded-full h-1.5 mt-1.5 overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full transition-all"
+                    style={{
+                      width: `${
+                        activeActivities.length > 0
+                          ? Math.round((completedActivitiesToday.length / activeActivities.length) * 100)
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold text-[#2D6A4F] mt-2 group-hover:underline">
+              Pacing Space →
+            </span>
+          </div>
+        </div>
+
+        {/* Card 5: Today's Personalized Meal Plan (Full Width Clickable Card) */}
+        <div
+          onClick={onOpenMeals}
+          className="bg-gradient-to-r from-[#FFFDF9] to-[#FFF4EB] rounded-2xl p-4 border border-[#FFE0C8] hover:border-[#FF7A24] cursor-pointer transition-all shadow-xs flex items-center justify-between group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-white border border-[#FFE0C8] flex items-center justify-center text-[#FF7A24] shrink-0">
+              <Utensils className="w-5 h-5" />
             </div>
 
-            <div className="pt-2">
-              <p className="text-[11px] text-[#132A1F]/70 leading-snug">
-                Log evening thoughts before sleep.
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF7A24]">
+                  Personalized Meal Plan
+                </span>
+                {dailyMealPlan && (
+                  <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded">
+                    Today
+                  </span>
+                )}
+              </div>
+
+              <h4 className="text-xs font-bold text-[#132A1F] mt-0.5">
+                {dailyMealPlan
+                  ? `Breakfast: ${dailyMealPlan.breakfast.name} · Lunch: ${dailyMealPlan.lunch.name}`
+                  : 'Generate Today\'s Spoon-Aware Nutrition Plan'}
+              </h4>
+
+              <p className="text-[11px] text-[#132A1F]/60 mt-0.5">
+                {dailyMealPlan
+                  ? `Dinner: ${dailyMealPlan.dinner.name} (Respecting allergies & energy)`
+                  : 'AI suggestions tailored to your dietary restrictions and current spoon capacity'}
               </p>
-              <span className="mt-2 inline-flex items-center gap-1 text-[11px] text-[#FF7A24] font-bold">
-                <span>Reflect</span>
-                <ChevronRight className="w-3 h-3" />
-              </span>
             </div>
           </div>
+
+          <div className="shrink-0 pl-2">
+            <span className="text-xs bg-[#FF7A24] text-white px-3 py-1.5 rounded-full font-bold shadow-xs group-hover:bg-[#E06516] transition-colors flex items-center gap-1">
+              <span>{dailyMealPlan ? 'View Plan' : 'Generate'}</span>
+              <ChevronRight className="w-3 h-3" />
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Prominent AI Companion Section with Orange Action Buttons */}
+      <div className="bg-[#FFFDF9] rounded-3xl p-4.5 border border-[#132A1F]/10 shadow-xs relative">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-[#132A1F] flex items-center justify-center text-[#FF7A24]">
+              <Sparkles className="w-4 h-4 text-[#FF7A24]" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-[#132A1F] font-display">AI Healthcare Assistant & Test Companion</h3>
+              <p className="text-[11px] text-[#132A1F]/60">Connected to authorized records & report Q&A</p>
+            </div>
+          </div>
+          <span className="text-[10px] bg-[#FFF4EB] text-[#FF7A24] border border-[#FF7A24]/30 px-2 py-0.5 rounded-full font-bold">
+            Authorized
+          </span>
+        </div>
+
+        <p className="text-xs text-[#132A1F]/80 italic bg-[#F8F6F0] rounded-xl p-3 mb-3 border border-[#132A1F]/5">
+          "Upload medical reports or ask questions about your symptoms, medications, and pacing thresholds."
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => onOpenAI()}
+            className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#FF7A24] hover:bg-[#d86214] text-white text-xs font-bold shadow-xs hover:shadow transition-all active:scale-95"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Ask Assistant</span>
+          </button>
+
+          <button
+            onClick={onOpenVoiceCall}
+            className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#132A1F] hover:bg-[#2D6A4F] text-white text-xs font-bold shadow-xs hover:shadow transition-all active:scale-95"
+          >
+            <Phone className="w-4 h-4 text-[#B7E4C7]" />
+            <span>Voice Session</span>
+          </button>
         </div>
       </div>
 
       {/* Quick Journal / Check-in Prompts */}
       <div>
         <div className="flex items-center justify-between mb-2.5 px-1">
-          <h2 className="text-base font-bold font-display text-[#132A1F]">Quick Reflections</h2>
+          <h2 className="text-base font-bold font-display text-[#132A1F]">My Journal</h2>
           <button
             onClick={onOpenJournal}
             className="text-xs bg-[#FF7A24] hover:bg-[#d86214] text-white font-bold px-3 py-1 rounded-full shadow-xs transition-all active:scale-95"
@@ -237,7 +447,6 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          {/* Card 1: Pause & reflect */}
           <div
             onClick={() => onQuickReflection('Pause & Reflect', 'What felt manageable or peaceful today?')}
             className="bg-[#FFEFE5] rounded-2xl p-3.5 cursor-pointer hover:shadow-xs transition-all border border-[#FF7A24]/20 flex flex-col justify-between"
@@ -257,7 +466,6 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
             </div>
           </div>
 
-          {/* Card 2: Set Intentions */}
           <div
             onClick={() => onQuickReflection('Pacing Intentions', 'How do you want to pace your energy today?')}
             className="bg-[#E8EFE9] rounded-2xl p-3.5 cursor-pointer hover:shadow-xs transition-all border border-[#52B788]/20 flex flex-col justify-between"
@@ -279,47 +487,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         </div>
       </div>
 
-      {/* Prominent AI Companion Section with Orange Action Buttons */}
-      <div className="bg-[#FFFDF9] rounded-3xl p-4.5 border border-[#132A1F]/10 shadow-xs relative">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-[#132A1F] flex items-center justify-center text-[#FF7A24]">
-              <Sparkles className="w-4 h-4 text-[#FF7A24]" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-[#132A1F] font-display">Healno Health Companion</h3>
-              <p className="text-[11px] text-[#132A1F]/60">Private, nonjudgmental health ally</p>
-            </div>
-          </div>
-          <span className="text-[10px] bg-[#FFF4EB] text-[#FF7A24] border border-[#FF7A24]/30 px-2 py-0.5 rounded-full font-bold">
-            Ready
-          </span>
-        </div>
-
-        <p className="text-xs text-[#132A1F]/80 italic bg-[#F8F6F0] rounded-xl p-3 mb-3 border border-[#132A1F]/5">
-          "Rest is never wasted time. What would feel kindest to your body right now?"
-        </p>
-
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => onOpenAI()}
-            className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#FF7A24] hover:bg-[#d86214] text-white text-xs font-bold shadow-xs hover:shadow transition-all active:scale-95"
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span>Text Companion</span>
-          </button>
-
-          <button
-            onClick={onOpenVoiceCall}
-            className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#132A1F] hover:bg-[#2D6A4F] text-white text-xs font-bold shadow-xs hover:shadow transition-all active:scale-95"
-          >
-            <Phone className="w-4 h-4 text-[#B7E4C7]" />
-            <span>Voice Call</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Today's Tasks Section (Real User Tasks Only) */}
+      {/* Today's Tasks Section */}
       <div className="bg-white rounded-3xl p-4.5 border border-[#132A1F]/10 shadow-xs">
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -389,7 +557,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         )}
       </div>
 
-      {/* Recent Symptoms Section (Real Data Only) */}
+      {/* Recent Symptoms Section */}
       <div className="bg-white rounded-3xl p-4.5 border border-[#132A1F]/10 shadow-xs">
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -434,93 +602,6 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         )}
       </div>
 
-      {/* Medications Routine (Real Data Only) */}
-      <div className="bg-white rounded-3xl p-4.5 border border-[#132A1F]/10 shadow-xs">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="text-sm font-bold text-[#132A1F] font-display">
-              Medications & Supplements
-            </h3>
-            <p className="text-[11px] text-[#132A1F]/60">Today's routine</p>
-          </div>
-          <button
-            onClick={() => onNavigateTab('space')}
-            className="text-xs bg-[#FF7A24] hover:bg-[#d86214] text-white font-bold px-3 py-1 rounded-full shadow-xs transition-all active:scale-95"
-          >
-            Manage
-          </button>
-        </div>
-
-        {todayMeds.length > 0 ? (
-          <div className="space-y-2">
-            {todayMeds.map(({ med, status }) => (
-              <div
-                key={med.id}
-                className={`flex items-center justify-between p-2.5 rounded-2xl border transition-all ${
-                  status === 'taken'
-                    ? 'bg-[#E8EFE9]/40 border-[#74C69D]/30 text-[#132A1F]/70'
-                    : 'bg-[#F8F6F0] border-[#132A1F]/5'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <button
-                    onClick={() =>
-                      onRecordMedication(med.id, status === 'taken' ? 'snoozed' : 'taken')
-                    }
-                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                      status === 'taken'
-                        ? 'bg-[#2D6A4F] text-white'
-                        : 'border-2 border-[#132A1F]/30 hover:border-[#FF7A24]'
-                    }`}
-                    aria-label={`Mark ${med.name} taken`}
-                  >
-                    {status === 'taken' && <CheckCircle2 className="w-4 h-4" />}
-                  </button>
-                  <div>
-                    <div className={`text-xs font-semibold ${status === 'taken' ? 'line-through' : 'text-[#132A1F]'}`}>
-                      {med.name} ({med.dosage})
-                    </div>
-                    <div className="text-[10px] text-[#132A1F]/60">
-                      {med.timeSlot} · {med.instructions.slice(0, 38)}
-                    </div>
-                  </div>
-                </div>
-
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                  status === 'taken' ? 'bg-[#D8F3DC] text-[#1B4332]' : 'bg-[#FFE5D9] text-[#6B4435]'
-                }`}>
-                  {status === 'taken' ? 'Taken' : 'Due'}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-4 bg-[#FAF8F5] rounded-2xl border border-dashed border-[#132A1F]/15">
-            <EmptyStateIllustration type="meds" className="w-12 h-12 mx-auto mb-1 opacity-70" />
-            <p className="text-xs text-[#132A1F]/70 font-medium">No medications currently recorded.</p>
-            <p className="text-[10px] text-[#132A1F]/50 mt-0.5">Add supplements or medicines in your profile when needed.</p>
-          </div>
-        )}
-      </div>
-
-      {/* Upcoming Appointments (Real Data Only — No Fake Evelyn Vance!) */}
-      {upcomingAppointment ? (
-        <div className="bg-[#FFFDF9] rounded-3xl p-4.5 border border-[#132A1F]/10 shadow-xs">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold text-[#FF7A24] uppercase tracking-wider flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Upcoming Visit</span>
-            </span>
-            <span className="text-xs text-[#132A1F]/70">{upcomingAppointment.date}</span>
-          </div>
-
-          <h4 className="text-sm font-bold text-[#132A1F]">
-            {upcomingAppointment.provider} ({upcomingAppointment.specialty})
-          </h4>
-          <p className="text-xs text-[#132A1F]/70 mt-0.5">{upcomingAppointment.purpose}</p>
-        </div>
-      ) : null}
-
       {/* Quick Launch Cards into Myths, Space, and Community */}
       <div className="grid grid-cols-3 gap-2.5">
         <button
@@ -560,7 +641,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           </div>
           <div>
             <div className="text-xs font-bold text-[#132A1F] font-display">Community</div>
-            <p className="text-[10px] text-[#132A1F]/60 mt-0.5">Shared experiences</p>
+            <p className="text-[10px] text-[#132A1F]/60 mt-0.5">Peer stories</p>
           </div>
           <span className="text-[10px] font-bold text-[#9A3412] mt-2 group-hover:underline">Connect →</span>
         </button>

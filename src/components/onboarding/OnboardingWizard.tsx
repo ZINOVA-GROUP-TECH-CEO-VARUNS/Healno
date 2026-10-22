@@ -138,6 +138,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   // Final confirmation & dashboard activation
   const handleCompleteAll = () => {
     storageService.clearOnboardingProgress();
+    storageService.setOnboardingCompleted(true);
 
     // Save actual user medications if any were added
     medsList.forEach((m) => {
@@ -156,7 +157,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     const summaryMedString = medsList.map((m) => `${m.name} ${m.dosage}`.trim()).join(', ');
 
     onComplete({
-      name: name.trim() || 'Health Friend',
+      name: name.trim() || 'Varun',
+      email: initialProfile.email || 'thexplorervaruns@gmail.com',
       gender,
       conditions: selectedConditions,
       commonSymptoms: selectedSymptoms,

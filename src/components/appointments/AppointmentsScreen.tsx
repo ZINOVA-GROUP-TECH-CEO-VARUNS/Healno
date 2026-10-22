@@ -13,8 +13,16 @@ import {
   ChevronRight,
   ClipboardList,
   CheckCircle2,
+  CalendarCheck,
+  CalendarX,
+  Edit2,
+  Trash2,
+  AlertCircle,
+  Building,
+  User,
+  Stethoscope,
 } from 'lucide-react';
-import { defaultCareProviders } from '../../services/storage';
+import { defaultCareProviders, storageService } from '../../services/storage';
 import { apiService } from '../../services/api';
 
 interface AppointmentsScreenProps {
@@ -22,7 +30,9 @@ interface AppointmentsScreenProps {
   recentSymptoms: SymptomLog[];
   medications: Medication[];
   onSaveAppointment: (apt: Appointment) => void;
+  onDeleteAppointment?: (id: string) => void;
   onBack: () => void;
+  userName?: string;
 }
 
 export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
@@ -30,17 +40,47 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
   recentSymptoms,
   medications,
   onSaveAppointment,
+  onDeleteAppointment,
   onBack,
+  userName = 'Friend',
 }) => {
   const [activeTab, setActiveTab] = useState<'appointments' | 'finder' | 'outreach'>('appointments');
+  const [timelineTab, setTimelineTab] = useState<'upcoming' | 'past'>('upcoming');
   const [selectedApt, setSelectedApt] = useState<Appointment | null>(appointments[0] || null);
   const [searchCareQuery, setSearchCareQuery] = useState('');
   const [careTypeFilter, setCareTypeFilter] = useState<string>('all');
   const [isGeneratingPrep, setIsGeneratingPrep] = useState(false);
 
+  // Modal states for creating / editing / rescheduling
+  const [showModal, setShowModal] = useState(false);
+  const [editingApt, setEditingApt] = useState<Appointment | null>(null);
+  const [isRescheduleMode, setIsRescheduleMode] = useState(false);
+
+  // Form fields
+  const [doctorName, setDoctorName] = useState('');
+  const [specialty, setSpecialty] = useState('General Practice / Primary Care');
+  const [clinicName, setClinicName] = useState('');
+  const [date, setDate] = useState(() => new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0]);
+  const [time, setTime] = useState('10:00');
+  const [purpose, setPurpose] = useState('');
+  const [notes, setNotes] = useState('');
+
   // Outreach assistance generator state
   const [outreachPurpose, setOutreachPurpose] = useState<'book' | 'reschedule' | 'ask_test'>('book');
   const [generatedScript, setGeneratedScript] = useState<string | null>(null);
+
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+
+  const upcomingAppointments = appointments
+    .filter((a) => !a.isCancelled && (a.date >= todayStr || !a.completed))
+    .sort((a, b) => (a.date > b.date ? 1 : -1));
+
+  const pastAppointments = appointments
+    .filter((a) => a.isCancelled || a.completed || a.date < todayStr)
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  const displayedList = timelineTab === 'upcoming' ? upcomingAppointments : pastAppointments;
 
   const filteredProviders = defaultCareProviders.filter((p) => {
     const matchesSearch =
@@ -49,6 +89,118 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
     const matchesType = careTypeFilter === 'all' || p.type === careTypeFilter;
     return matchesSearch && matchesType;
   });
+
+  const openNewAptModal = () => {
+    setEditingApt(null);
+    setIsRescheduleMode(false);
+    setDoctorName('');
+    setSpecialty('General Practice / Primary Care');
+    setClinicName('');
+    setDate(new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0]);
+    setTime('10:00');
+    setPurpose('');
+    setNotes('');
+    setShowModal(true);
+  };
+
+  const openEditModal = (apt: Appointment) => {
+    setEditingApt(apt);
+    setIsRescheduleMode(false);
+    setDoctorName(apt.doctorName || apt.provider);
+    setSpecialty(apt.specialty);
+    setClinicName(apt.location);
+    setDate(apt.date);
+    setTime(apt.time);
+    setPurpose(apt.purpose);
+    setNotes(apt.clinicalNotes || '');
+    setShowModal(true);
+  };
+
+  const openRescheduleModal = (apt: Appointment) => {
+    setEditingApt(apt);
+    setIsRescheduleMode(true);
+    setDoctorName(apt.doctorName || apt.provider);
+    setSpecialty(apt.specialty);
+    setClinicName(apt.location);
+    setDate(apt.date);
+    setTime(apt.time);
+    setPurpose(apt.purpose);
+    setNotes(apt.clinicalNotes || '');
+    setShowModal(true);
+  };
+
+  const handleSaveModal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!doctorName.trim() || !date) return;
+
+    if (editingApt) {
+      const updated: Appointment = {
+        ...editingApt,
+        doctorName: doctorName.trim(),
+        provider: doctorName.trim(),
+        specialty: specialty.trim(),
+        location: clinicName.trim() || 'Local Clinic',
+        date,
+        time,
+        purpose: purpose.trim() || 'Health consultation',
+        clinicalNotes: notes.trim(),
+        isRescheduled: isRescheduleMode ? true : editingApt.isRescheduled,
+        updatedAt: new Date().toISOString(),
+      };
+      onSaveAppointment(updated);
+      setSelectedApt(updated);
+    } else {
+      const newApt: Appointment = {
+        id: `apt_${Date.now()}`,
+        doctorName: doctorName.trim(),
+        provider: doctorName.trim(),
+        specialty: specialty.trim(),
+        location: clinicName.trim() || 'Local Clinic',
+        date,
+        time,
+        purpose: purpose.trim() || 'Health consultation',
+        reminderSet: true,
+        completed: false,
+        doctorQuestions: [
+          `What are the recommended diagnostic follow-ups for my symptoms?`,
+          `Are there lifestyle adjustments or pacing techniques I should prioritize?`,
+        ],
+        talkingPoints: [
+          `Experiencing fatigue and symptom variations across the day.`,
+          `Reviewing current medication tolerability.`,
+        ],
+        clinicalNotes: notes.trim(),
+        createdAt: new Date().toISOString(),
+      };
+      onSaveAppointment(newApt);
+      setSelectedApt(newApt);
+    }
+
+    setShowModal(false);
+  };
+
+  const handleCancelAppointment = (apt: Appointment) => {
+    const updated: Appointment = {
+      ...apt,
+      isCancelled: true,
+      updatedAt: new Date().toISOString(),
+    };
+    onSaveAppointment(updated);
+    if (selectedApt?.id === apt.id) {
+      setSelectedApt(updated);
+    }
+  };
+
+  const handleDeleteAppointment = (id: string) => {
+    if (onDeleteAppointment) {
+      onDeleteAppointment(id);
+    } else {
+      storageService.deleteAppointment(id);
+    }
+    if (selectedApt?.id === id) {
+      setSelectedApt(null);
+    }
+  };
 
   const handleGenerateDoctorPrep = async (apt: Appointment) => {
     setIsGeneratingPrep(true);
@@ -76,17 +228,21 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
   };
 
   const generateOutreachScript = () => {
+    const callerName = userName || 'Patient';
+    const targetDoc = selectedApt?.doctorName || selectedApt?.provider || 'the clinic';
+
     if (outreachPurpose === 'book') {
       setGeneratedScript(
-        `"Hello, my name is Jose Maria and I am calling to schedule an appointment with Dr. Evelyn Vance regarding ongoing dysautonomia and fatigue management. I am looking for a morning slot on a Tuesday or Thursday when my cognitive energy is highest. Do you have any availability within the next 4 weeks?"`
+        `"Hello, my name is ${callerName} and I am calling to schedule an appointment with ${targetDoc} regarding my chronic symptoms and fatigue management. I am looking for a morning slot when my cognitive energy is highest. Do you have any availability in the upcoming weeks?"`
       );
     } else if (outreachPurpose === 'reschedule') {
+      const aptDate = selectedApt ? selectedApt.date : 'my scheduled date';
       setGeneratedScript(
-        `"Hello, I am calling regarding my upcoming appointment on October 28th with Dr. Vance. I am experiencing a severe symptom flare and need to reschedule to a later date when I can safely travel. Could we look at dates two weeks from now?"`
+        `"Hello, my name is ${callerName}. I am calling regarding my upcoming appointment on ${aptDate} with ${targetDoc}. I am experiencing a health flare and need to reschedule to a later date when I can safely travel. Could we look at dates two weeks from now?"`
       );
     } else {
       setGeneratedScript(
-        `"Hello, I am calling to check if my recent lab panel (Ferritin and Vitamin D) ordered on October 5th has been reviewed by the clinician, and if there are any next steps or prescription instructions added to my chart."`
+        `"Hello, my name is ${callerName}. I am calling to check if my recent diagnostic lab results and test reports ordered by ${targetDoc} have been received and reviewed by the clinician, and if any treatment instructions were added to my file."`
       );
     }
   };
@@ -96,15 +252,19 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
       {/* Top Header */}
       <div className="flex items-center justify-between py-2">
         <div>
-          <h2 className="text-xl font-bold text-[#132A1F] font-display">Appointments & Care Coordination</h2>
-          <p className="text-xs text-[#132A1F]/60">Clinician preparation briefs & verified care discovery</p>
+          <h2 className="text-xl font-bold text-[#132A1F] font-display flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-[#FF7A24]" />
+            <span>Doctor Appointments & Visits</span>
+          </h2>
+          <p className="text-xs text-[#132A1F]/60">Schedule visits, generate prep briefs, and coordinate clinical care</p>
         </div>
 
         <button
-          onClick={onBack}
-          className="text-xs bg-[#E8EFE9] text-[#132A1F] px-3 py-1.5 rounded-full font-semibold"
+          onClick={openNewAptModal}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
         >
-          Back
+          <Plus className="w-4 h-4 stroke-[2.5]" />
+          <span>New Visit</span>
         </button>
       </div>
 
@@ -113,40 +273,93 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
         <button
           onClick={() => setActiveTab('appointments')}
           className={`flex-1 py-1.5 text-xs font-semibold rounded-xl transition-all ${
-            activeTab === 'appointments' ? 'bg-white text-[#132A1F] shadow-xs' : 'text-[#132A1F]/60'
+            activeTab === 'appointments' ? 'bg-[#FF7A24] text-white shadow-xs' : 'text-[#132A1F]/70 hover:text-[#132A1F]'
           }`}
         >
-          My Visits ({appointments.length})
+          Visits ({appointments.length})
         </button>
         <button
           onClick={() => setActiveTab('finder')}
           className={`flex-1 py-1.5 text-xs font-semibold rounded-xl transition-all ${
-            activeTab === 'finder' ? 'bg-white text-[#132A1F] shadow-xs' : 'text-[#132A1F]/60'
+            activeTab === 'finder' ? 'bg-[#FF7A24] text-white shadow-xs' : 'text-[#132A1F]/70 hover:text-[#132A1F]'
           }`}
         >
-          Local Care Finder
+          Local Directory
         </button>
         <button
           onClick={() => setActiveTab('outreach')}
           className={`flex-1 py-1.5 text-xs font-semibold rounded-xl transition-all ${
-            activeTab === 'outreach' ? 'bg-white text-[#132A1F] shadow-xs' : 'text-[#132A1F]/60'
+            activeTab === 'outreach' ? 'bg-[#FF7A24] text-white shadow-xs' : 'text-[#132A1F]/70 hover:text-[#132A1F]'
           }`}
         >
           Call Scripts
         </button>
       </div>
 
+      {/* ================= APPOINTMENTS TAB ================= */}
       {activeTab === 'appointments' && (
         <div className="space-y-4">
+          {/* Upcoming vs Past Selector */}
+          <div className="flex items-center justify-between border-b border-[#132A1F]/10 pb-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setTimelineTab('upcoming')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  timelineTab === 'upcoming'
+                    ? 'bg-[#132A1F] text-white shadow-xs'
+                    : 'bg-white text-[#132A1F]/70 border border-[#132A1F]/10 hover:bg-[#F8F6F0]'
+                }`}
+              >
+                Upcoming Visits ({upcomingAppointments.length})
+              </button>
+              <button
+                onClick={() => setTimelineTab('past')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  timelineTab === 'past'
+                    ? 'bg-[#132A1F] text-white shadow-xs'
+                    : 'bg-white text-[#132A1F]/70 border border-[#132A1F]/10 hover:bg-[#F8F6F0]'
+                }`}
+              >
+                Past & Cancelled ({pastAppointments.length})
+              </button>
+            </div>
+
+            <span className="text-[11px] text-[#132A1F]/50 font-medium">
+              {displayedList.length} total
+            </span>
+          </div>
+
+          {/* Selected Appointment Detailed Card */}
           {selectedApt && (
             <div className="bg-[#FFFDF9] rounded-3xl p-5 border border-[#132A1F]/10 shadow-xs space-y-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="text-[10px] bg-[#E89D35] text-white px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                    Next Consultation
-                  </span>
-                  <h3 className="text-base font-bold text-[#132A1F] font-display mt-2">
-                    {selectedApt.provider}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                        selectedApt.isCancelled
+                          ? 'bg-red-100 text-red-800'
+                          : selectedApt.isRescheduled
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-[#FF7A24] text-white'
+                      }`}
+                    >
+                      {selectedApt.isCancelled
+                        ? 'Cancelled Visit'
+                        : selectedApt.isRescheduled
+                        ? 'Rescheduled Visit'
+                        : 'Scheduled Visit'}
+                    </span>
+                    {selectedApt.completed && (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                        Completed
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="text-base font-bold text-[#132A1F] font-display mt-2 flex items-center gap-1.5">
+                    <Stethoscope className="w-4 h-4 text-[#FF7A24]" />
+                    <span>{selectedApt.doctorName || selectedApt.provider}</span>
                   </h3>
                   <p className="text-xs text-[#132A1F]/70">
                     {selectedApt.specialty} · {selectedApt.location}
@@ -161,10 +374,55 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
                 </div>
               </div>
 
-              {/* Purpose */}
-              <div className="bg-[#F8F6F0] p-3 rounded-2xl text-xs text-[#132A1F]/80">
-                <span className="font-bold text-[#132A1F]">Visit Purpose: </span>
-                {selectedApt.purpose}
+              {/* Action Controls for this appointment */}
+              <div className="flex items-center gap-2 pt-1 border-t border-[#132A1F]/5 flex-wrap">
+                <button
+                  onClick={() => openEditModal(selectedApt)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#F8F6F0] hover:bg-[#FFE0C8] text-[#132A1F] text-xs font-semibold transition-colors"
+                >
+                  <Edit2 className="w-3 h-3 text-[#FF7A24]" />
+                  <span>Edit Details</span>
+                </button>
+                {!selectedApt.isCancelled && (
+                  <button
+                    onClick={() => openRescheduleModal(selectedApt)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#FFF4EB] hover:bg-[#FFE0C8] text-[#FF7A24] text-xs font-bold border border-[#FFE0C8] transition-colors"
+                  >
+                    <CalendarCheck className="w-3 h-3" />
+                    <span>Reschedule</span>
+                  </button>
+                )}
+                {!selectedApt.isCancelled ? (
+                  <button
+                    onClick={() => handleCancelAppointment(selectedApt)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors"
+                  >
+                    <CalendarX className="w-3 h-3" />
+                    <span>Cancel Visit</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleDeleteAppointment(selectedApt.id)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Delete Record</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Purpose & Clinical Notes */}
+              <div className="bg-[#F8F6F0] p-3 rounded-2xl text-xs text-[#132A1F]/80 space-y-1">
+                <div>
+                  <span className="font-bold text-[#132A1F]">Visit Purpose: </span>
+                  {selectedApt.purpose}
+                </div>
+                {selectedApt.clinicalNotes && (
+                  <div className="text-[#132A1F]/70 pt-1 border-t border-[#132A1F]/10">
+                    <span className="font-bold text-[#132A1F]">Notes: </span>
+                    {selectedApt.clinicalNotes}
+                  </div>
+                )}
               </div>
 
               {/* Doctor Prep Brief Generator */}
@@ -220,32 +478,67 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
           {/* Appointment list */}
           <div className="space-y-2">
             <h4 className="text-xs font-bold text-[#132A1F] px-1 uppercase tracking-wider">
-              All Scheduled Appointments
+              {timelineTab === 'upcoming' ? 'Upcoming Schedule' : 'Past & Cancelled Records'}
             </h4>
-            {appointments.map((apt) => (
-              <div
-                key={apt.id}
-                onClick={() => setSelectedApt(apt)}
-                className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
-                  selectedApt?.id === apt.id
-                    ? 'bg-white border-[#132A1F] shadow-xs'
-                    : 'bg-white/80 border-[#132A1F]/10 hover:bg-white'
-                }`}
-              >
-                <div>
-                  <div className="text-xs font-bold text-[#132A1F]">{apt.provider}</div>
-                  <div className="text-[10px] text-[#132A1F]/60">
-                    {apt.date} at {apt.time} · {apt.purpose}
-                  </div>
-                </div>
 
-                <ChevronRight className="w-4 h-4 text-[#132A1F]/40" />
+            {displayedList.length === 0 ? (
+              <div className="bg-white rounded-2xl p-6 text-center border border-[#132A1F]/10 space-y-2">
+                <Calendar className="w-8 h-8 text-[#FF7A24] mx-auto opacity-70" />
+                <h5 className="text-xs font-bold text-[#132A1F]">No {timelineTab} appointments</h5>
+                <p className="text-[11px] text-[#132A1F]/60">
+                  {timelineTab === 'upcoming'
+                    ? 'Schedule follow-up consultations or specialist appointments.'
+                    : 'Completed and cancelled appointments will be archived here.'}
+                </p>
+                {timelineTab === 'upcoming' && (
+                  <button
+                    onClick={openNewAptModal}
+                    className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-[#FF7A24] text-white text-xs font-bold mt-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Schedule Appointment</span>
+                  </button>
+                )}
               </div>
-            ))}
+            ) : (
+              displayedList.map((apt) => (
+                <div
+                  key={apt.id}
+                  onClick={() => setSelectedApt(apt)}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                    selectedApt?.id === apt.id
+                      ? 'bg-white border-[#FF7A24] shadow-xs'
+                      : 'bg-white/80 border-[#132A1F]/10 hover:bg-white'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs font-bold text-[#132A1F]">{apt.doctorName || apt.provider}</div>
+                      {apt.isCancelled && (
+                        <span className="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.2 rounded font-bold">
+                          Cancelled
+                        </span>
+                      )}
+                      {apt.isRescheduled && (
+                        <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded font-bold">
+                          Rescheduled
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-[#132A1F]/60 mt-0.5">
+                      {apt.date} at {apt.time} · {apt.specialty} · {apt.location}
+                    </div>
+                  </div>
+
+                  <ChevronRight className="w-4 h-4 text-[#132A1F]/40" />
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
 
+      {/* ================= LOCAL CARE FINDER TAB ================= */}
       {activeTab === 'finder' && (
         <div className="space-y-3">
           <div className="bg-white rounded-2xl p-3 border border-[#132A1F]/10 space-y-2">
@@ -317,12 +610,17 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
                     ★ {prov.rating} patient review rating
                   </span>
 
-                  <a
-                    href={`tel:${prov.phone.replace(/\D/g, '')}`}
-                    className="text-xs bg-[#132A1F] text-white px-3 py-1 rounded-full font-medium hover:bg-[#2D6A4F] transition-colors"
+                  <button
+                    onClick={() => {
+                      setDoctorName(prov.name);
+                      setSpecialty(prov.specialty);
+                      setClinicName(prov.address);
+                      setShowModal(true);
+                    }}
+                    className="text-xs bg-[#FF7A24] text-white px-3 py-1 rounded-full font-bold hover:bg-[#E06516] transition-colors"
                   >
-                    Call Office
-                  </a>
+                    Add to Visits
+                  </button>
                 </div>
               </div>
             ))}
@@ -330,6 +628,7 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
         </div>
       )}
 
+      {/* ================= OUTREACH & CALL SCRIPTS TAB ================= */}
       {activeTab === 'outreach' && (
         <div className="bg-white rounded-3xl p-5 border border-[#132A1F]/10 shadow-xs space-y-4">
           <div>
@@ -337,7 +636,7 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
               Clinician Communication & Call Scripts
             </h3>
             <p className="text-xs text-[#132A1F]/60 mt-0.5">
-              Phone calls while experiencing fatigue or brain fog can feel exhausting. Use these tailored scripts.
+              Phone calls while experiencing fatigue or brain fog can feel exhausting. Use these personalized scripts tailored for {userName}.
             </p>
           </div>
 
@@ -367,7 +666,7 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
 
           <button
             onClick={generateOutreachScript}
-            className="w-full py-2.5 rounded-xl bg-[#E89D35] hover:bg-[#d88d25] text-white font-semibold text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5"
+            className="w-full py-2.5 rounded-xl bg-[#FF7A24] hover:bg-[#E06516] text-white font-semibold text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5"
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>Generate Clear Call Script</span>
@@ -383,6 +682,149 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
               </p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ================= MODAL: ADD / EDIT / RESCHEDULE APPOINTMENT ================= */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 bg-[#132A1F]/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#FAF8F5] w-full max-w-md max-h-[90vh] rounded-3xl p-6 shadow-2xl border border-[#132A1F]/10 overflow-y-auto space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-2 border-b border-[#132A1F]/10">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#FFF4EB] flex items-center justify-center text-[#FF7A24]">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <h3 className="text-base font-bold text-[#132A1F] font-display">
+                  {isRescheduleMode
+                    ? 'Reschedule Appointment'
+                    : editingApt
+                    ? 'Edit Appointment'
+                    : 'Schedule Doctor Appointment'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowModal(false)}
+                className="w-7 h-7 rounded-full bg-[#E8EFE9] flex items-center justify-center text-[#132A1F]/70 hover:bg-[#d8e3da]"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveModal} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[#132A1F] mb-1">
+                  Doctor / Provider Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Dr. Sarah Jenkins, Northwestern Neuro"
+                  value={doctorName}
+                  onChange={(e) => setDoctorName(e.target.value)}
+                  className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-bold text-[#132A1F] mb-1">
+                    Specialty
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Dysautonomia, Cardiology, Primary Care"
+                    value={specialty}
+                    onChange={(e) => setSpecialty(e.target.value)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#132A1F] mb-1">
+                    Clinic / Hospital
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Lakeview Medical Center"
+                    value={clinicName}
+                    onChange={(e) => setClinicName(e.target.value)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#132A1F] mb-1">
+                    Appointment Date *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-2.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#132A1F] mb-1">
+                    Time
+                  </label>
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-2.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#132A1F] mb-1">
+                  Purpose of Visit
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 6-Month autonomic check-in, bloodwork review, medication titration"
+                  value={purpose}
+                  onChange={(e) => setPurpose(e.target.value)}
+                  className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#132A1F] mb-1">
+                  Appointment Notes (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Items to remember, symptoms to highlight, or questions for reception..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full bg-white border border-[#132A1F]/20 rounded-xl p-3 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 rounded-full text-xs font-semibold text-[#132A1F]/70 hover:bg-[#E8EFE9]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
+                >
+                  {isRescheduleMode
+                    ? 'Confirm Reschedule'
+                    : editingApt
+                    ? 'Update Appointment'
+                    : 'Schedule Visit'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

@@ -65,7 +65,7 @@ export default function App() {
   const [activeSecondaryView, setActiveSecondaryView] = useState<
     'documents' | 'appointments' | 'meals' | 'lessons' | 'profile' | 'journal' | null
   >(null);
-  const [profileInitialTab, setProfileInitialTab] = useState<'profile' | 'calendar' | 'achievements' | 'privacy'>('profile');
+  const [profileInitialTab, setProfileInitialTab] = useState<'profile' | 'documents' | 'timeline' | 'calendar' | 'achievements' | 'privacy'>('profile');
 
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
@@ -279,8 +279,16 @@ export default function App() {
         <LandingPage
           onLaunchApp={(mode) => {
             setViewMode('app');
-            if (mode === 'login') setIsAuthModalOpen(true);
-            else if (mode === 'onboarding' || !profile.isOnboarded) setIsOnboardingOpen(true);
+            const hasCompleted = storageService.isOnboardingCompleted() || profile.isOnboarded;
+            if (mode === 'login') {
+              setIsAuthModalOpen(true);
+            } else if (mode === 'signup') {
+              setIsAuthModalOpen(true);
+            } else if (mode === 'onboarding') {
+              if (!hasCompleted) setIsOnboardingOpen(true);
+            } else {
+              if (!hasCompleted) setIsOnboardingOpen(true);
+            }
           }}
         />
         <OfflineIndicator />
@@ -288,23 +296,32 @@ export default function App() {
           isOpen={isAuthModalOpen}
           onClose={() => setIsAuthModalOpen(false)}
           onLoginSuccess={(updatedUser) => {
-            const nextProfile = { ...profile, ...updatedUser };
+            const hasCompleted = storageService.isOnboardingCompleted() || profile.isOnboarded || updatedUser.isOnboarded;
+            const nextProfile = {
+              ...profile,
+              ...updatedUser,
+              isOnboarded: Boolean(hasCompleted),
+              isAuthenticated: true,
+            };
             handleUpdateProfile(nextProfile);
             setIsAuthModalOpen(false);
             setViewMode('app');
-            if (!nextProfile.isOnboarded) {
+            if (!hasCompleted) {
               setIsOnboardingOpen(true);
             }
           }}
           onStartOnboarding={() => {
             setIsAuthModalOpen(false);
-            setIsOnboardingOpen(true);
+            if (!storageService.isOnboardingCompleted() && !profile.isOnboarded) {
+              setIsOnboardingOpen(true);
+            }
           }}
         />
         <OnboardingWizard
           isOpen={isOnboardingOpen}
           onClose={() => setIsOnboardingOpen(false)}
           onComplete={(newProfile) => {
+            storageService.setOnboardingCompleted(true);
             const finishedProfile = { ...profile, ...newProfile, isOnboarded: true, isAuthenticated: true };
             handleUpdateProfile(finishedProfile);
             setIsOnboardingOpen(false);
@@ -353,7 +370,12 @@ export default function App() {
             recentSymptoms={symptoms}
             medications={medications}
             onSaveAppointment={handleSaveAppointment}
+            onDeleteAppointment={(id) => {
+              storageService.deleteAppointment(id);
+              setAppointments(storageService.getAppointments());
+            }}
             onBack={() => setActiveSecondaryView(null)}
+            userName={profile.name || 'Friend'}
           />
         )}
 
@@ -362,6 +384,7 @@ export default function App() {
             meals={meals}
             remainingSpoons={remainingSpoons}
             userDietaryPreferences={profile.dietaryPreferences}
+            userProfile={profile}
             onSaveMeal={handleSaveMeal}
             onBack={() => setActiveSecondaryView(null)}
           />
@@ -390,6 +413,7 @@ export default function App() {
               setActiveSecondaryView(null);
               handleSelectTab('symptoms');
             }}
+            onOpenAppointments={() => setActiveSecondaryView('appointments')}
           />
         )}
 
@@ -431,8 +455,11 @@ export default function App() {
             onQuickReflection={handleQuickReflection}
             onOpenMeals={() => setActiveSecondaryView('meals')}
             onOpenLessons={() => setActiveSecondaryView('lessons')}
-            onOpenDocuments={() => setActiveSecondaryView('documents')}
-            onOpenCareFinder={() => setActiveSecondaryView('appointments')}
+            onOpenDocuments={() => {
+              setProfileInitialTab('documents');
+              setActiveSecondaryView('profile');
+            }}
+            onOpenAppointments={() => setActiveSecondaryView('appointments')}
             onOpenJournal={() => setActiveSecondaryView('journal')}
           />
         )}

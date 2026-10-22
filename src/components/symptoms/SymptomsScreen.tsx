@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { SymptomLog } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { SymptomLog, Medication } from '../../types';
+import { storageService } from '../../services/storage';
 import {
   Activity,
   Plus,
@@ -10,10 +11,16 @@ import {
   Trash2,
   AlertCircle,
   TrendingUp,
-  Filter,
   Clock,
-  Tag,
+  Pill,
+  Edit2,
+  CheckCircle2,
+  ShieldAlert,
+  FileText,
+  Sliders,
   Check,
+  X,
+  History,
 } from 'lucide-react';
 import { EmptyStateIllustration, TimelineIllustration } from '../common/CodeIllustrations';
 
@@ -30,14 +37,15 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
   onAddSymptom,
   onDeleteSymptom,
   onExportSummary,
-  xpScore = 0,
 }) => {
-  const [activeTab, setActiveTab] = useState<'diary' | 'trends'>('diary');
-  const [showLogModal, setShowLogModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'symptoms' | 'medicines' | 'trends'>('symptoms');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  // Form states for new symptom
+  // Symptoms state & modal
+  const [showSymptomModal, setShowSymptomModal] = useState(false);
+  const [editingSymptom, setEditingSymptom] = useState<SymptomLog | null>(null);
+  const [isCondition, setIsCondition] = useState(false);
   const [category, setCategory] = useState<SymptomLog['category']>('fatigue');
   const [name, setName] = useState('Persistent Fatigue');
   const [intensity, setIntensity] = useState(5);
@@ -47,6 +55,26 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
   const [restPeriods, setRestPeriods] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState(() => new Date().toTimeString().slice(0, 5));
+
+  // Medications state & modal
+  const [medications, setMedications] = useState<Medication[]>(() => storageService.getMedications());
+  const [medTab, setMedTab] = useState<'active' | 'past'>('active');
+  const [showMedModal, setShowMedModal] = useState(false);
+  const [editingMed, setEditingMed] = useState<Medication | null>(null);
+  const [medName, setMedName] = useState('');
+  const [dosage, setDosage] = useState('');
+  const [frequency, setFrequency] = useState('Once daily');
+  const [timeSlot, setTimeSlot] = useState<Medication['timeSlot']>('Morning');
+  const [medCategory, setMedCategory] = useState<Medication['category']>('Prescription');
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState('');
+  const [associatedCondition, setAssociatedCondition] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const [isAsNeeded, setIsAsNeeded] = useState(false);
+
+  useEffect(() => {
+    setMedications(storageService.getMedications());
+  }, []);
 
   const availableTags = [
     'Morning',
@@ -68,31 +96,81 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
     { id: 'sleep', label: 'Sleep & Rest' },
     { id: 'digestive', label: 'Digestive & Gut' },
     { id: 'mood', label: 'Mood & Stress' },
+    { id: 'condition', label: 'Chronic Condition' },
     { id: 'custom', label: 'Other / Custom' },
   ];
+
+  const openAddSymptomModal = () => {
+    setEditingSymptom(null);
+    setIsCondition(false);
+    setCategory('fatigue');
+    setName('Persistent Fatigue');
+    setIntensity(5);
+    setNotes('');
+    setSelectedTags(['Morning']);
+    setTriggers('');
+    setRestPeriods('');
+    setDate(new Date().toISOString().split('T')[0]);
+    setTime(new Date().toTimeString().slice(0, 5));
+    setShowSymptomModal(true);
+  };
+
+  const openEditSymptomModal = (sym: SymptomLog) => {
+    setEditingSymptom(sym);
+    setIsCondition(Boolean(sym.isCondition));
+    setCategory(sym.category);
+    setName(sym.name);
+    setIntensity(sym.intensity);
+    setNotes(sym.notes || '');
+    setSelectedTags(sym.tags || []);
+    setTriggers(sym.triggers ? sym.triggers.join(', ') : '');
+    setRestPeriods(sym.restPeriods || '');
+    setDate(sym.date);
+    setTime(sym.time || new Date().toTimeString().slice(0, 5));
+    setShowSymptomModal(true);
+  };
 
   const handleSaveSymptom = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    const newLog: SymptomLog = {
-      id: `sym_${Date.now()}`,
-      date,
-      time,
-      category,
-      name: name.trim(),
-      intensity: Number(intensity),
-      notes: notes.trim(),
-      tags: selectedTags,
-      triggers: triggers ? triggers.split(',').map((t) => t.trim()).filter(Boolean) : [],
-      restPeriods: restPeriods.trim(),
-    };
+    if (editingSymptom) {
+      // Delete old and add updated
+      onDeleteSymptom(editingSymptom.id);
+      const updated: SymptomLog = {
+        ...editingSymptom,
+        date,
+        time,
+        category: isCondition ? 'condition' : category,
+        name: name.trim(),
+        intensity: Number(intensity),
+        notes: notes.trim(),
+        tags: selectedTags,
+        triggers: triggers ? triggers.split(',').map((t) => t.trim()).filter(Boolean) : [],
+        restPeriods: restPeriods.trim(),
+        isCondition,
+        status: 'active',
+      };
+      onAddSymptom(updated);
+    } else {
+      const newLog: SymptomLog = {
+        id: `sym_${Date.now()}`,
+        date,
+        time,
+        category: isCondition ? 'condition' : category,
+        name: name.trim(),
+        intensity: Number(intensity),
+        notes: notes.trim(),
+        tags: selectedTags,
+        triggers: triggers ? triggers.split(',').map((t) => t.trim()).filter(Boolean) : [],
+        restPeriods: restPeriods.trim(),
+        isCondition,
+        status: 'active',
+      };
+      onAddSymptom(newLog);
+    }
 
-    onAddSymptom(newLog);
-    setShowLogModal(false);
-    setNotes('');
-    setTriggers('');
-    setRestPeriods('');
+    setShowSymptomModal(false);
   };
 
   const toggleTag = (tag: string) => {
@@ -103,7 +181,92 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
     }
   };
 
-  // Compute metrics from actual persisted symptoms
+  // Medicine operations
+  const openAddMedModal = () => {
+    setEditingMed(null);
+    setMedName('');
+    setDosage('');
+    setFrequency('Once daily');
+    setTimeSlot('Morning');
+    setMedCategory('Prescription');
+    setStartDate(new Date().toISOString().split('T')[0]);
+    setEndDate('');
+    setAssociatedCondition('');
+    setInstructions('');
+    setIsAsNeeded(false);
+    setShowMedModal(true);
+  };
+
+  const openEditMedModal = (med: Medication) => {
+    setEditingMed(med);
+    setMedName(med.name);
+    setDosage(med.dosage);
+    setFrequency(med.frequency || 'Once daily');
+    setTimeSlot(med.timeSlot);
+    setMedCategory(med.category);
+    setStartDate(med.startDate || new Date().toISOString().split('T')[0]);
+    setEndDate(med.endDate || '');
+    setAssociatedCondition(med.associatedCondition || '');
+    setInstructions(med.instructions || '');
+    setIsAsNeeded(med.isAsNeeded);
+    setShowMedModal(true);
+  };
+
+  const handleSaveMedication = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!medName.trim() || !dosage.trim()) return;
+
+    if (editingMed) {
+      const updated: Medication = {
+        ...editingMed,
+        name: medName.trim(),
+        dosage: dosage.trim(),
+        frequency: frequency.trim(),
+        timeSlot,
+        category: medCategory,
+        startDate,
+        endDate: endDate ? endDate : undefined,
+        associatedCondition: associatedCondition.trim(),
+        instructions: instructions.trim(),
+        isAsNeeded,
+        updatedAt: new Date().toISOString(),
+      };
+      storageService.saveMedication(updated);
+    } else {
+      const newMed: Medication = {
+        id: `med_${Date.now()}`,
+        name: medName.trim(),
+        dosage: dosage.trim(),
+        frequency: frequency.trim(),
+        timeSlot,
+        scheduleTimes: [timeSlot === 'Morning' ? '08:00' : timeSlot === 'Evening' ? '20:00' : '12:00'],
+        category: medCategory,
+        startDate,
+        endDate: endDate ? endDate : undefined,
+        associatedCondition: associatedCondition.trim(),
+        instructions: instructions.trim(),
+        isAsNeeded,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+      };
+      storageService.saveMedication(newMed);
+    }
+
+    setMedications(storageService.getMedications());
+    setShowMedModal(false);
+  };
+
+  const handleDiscontinueMed = (id: string) => {
+    storageService.discontinueMedication(id);
+    setMedications(storageService.getMedications());
+  };
+
+  const handleDeleteMed = (id: string) => {
+    storageService.deleteMedication(id);
+    setMedications(storageService.getMedications());
+  };
+
+  // Filter symptoms
   const filteredSymptoms = symptoms.filter((s) => {
     const matchesCategory = selectedCategory === 'all' || s.category === selectedCategory;
     const matchesSearch =
@@ -114,6 +277,20 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
     return matchesCategory && matchesSearch;
   });
 
+  // Filter medications
+  const activeMeds = medications.filter((m) => m.status !== 'discontinued');
+  const pastMeds = medications.filter((m) => m.status === 'discontinued');
+
+  const filteredMeds = (medTab === 'active' ? activeMeds : pastMeds).filter((m) => {
+    return (
+      searchQuery === '' ||
+      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.dosage.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.associatedCondition?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
+
+  // Metrics
   const fatigueLogs = symptoms.filter((s) => s.category === 'fatigue');
   const avgFatigue = fatigueLogs.length > 0
     ? (fatigueLogs.reduce((acc, s) => acc + s.intensity, 0) / fatigueLogs.length).toFixed(1)
@@ -135,42 +312,59 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
         <div>
           <h2 className="text-xl font-bold text-[#132A1F] font-display flex items-center gap-2">
             <Activity className="w-5 h-5 text-[#FF7A24]" />
-            <span>Symptoms Tracker</span>
+            <span>Symptoms & Medicines</span>
           </h2>
           <p className="text-xs text-[#132A1F]/60">
-            Log physical sensations, severity patterns, and doctor-ready clinical records
+            Log medical conditions, symptoms, and manage prescription regimens
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={onExportSummary}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white border border-[#132A1F]/15 hover:bg-[#F8F6F0] text-xs font-semibold text-[#132A1F] shadow-2xs transition-colors"
-            title="Export Clinical Health Summary"
-          >
-            <Download className="w-3.5 h-3.5 text-[#FF7A24]" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
-
-          <button
-            onClick={() => setShowLogModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>Log Symptom</span>
-          </button>
+          {activeTab === 'symptoms' ? (
+            <button
+              onClick={openAddSymptomModal}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Log Symptom</span>
+            </button>
+          ) : activeTab === 'medicines' ? (
+            <button
+              onClick={openAddMedModal}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Add Medicine</span>
+            </button>
+          ) : (
+            <button
+              onClick={onExportSummary}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white border border-[#132A1F]/15 hover:bg-[#F8F6F0] text-xs font-semibold text-[#132A1F] shadow-2xs transition-colors"
+            >
+              <Download className="w-3.5 h-3.5 text-[#FF7A24]" />
+              <span>Export</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Segmented view switcher */}
-      <div className="flex items-center justify-center p-1 bg-[#E8EFE9] rounded-2xl max-w-xs mx-auto">
+      {/* Main Segmented Switcher: Symptoms vs Medicines vs Trends */}
+      <div className="flex items-center justify-center p-1 bg-[#E8EFE9] rounded-2xl max-w-md mx-auto">
         <button
-          onClick={() => setActiveTab('diary')}
+          onClick={() => { setActiveTab('symptoms'); setSearchQuery(''); }}
           className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all ${
-            activeTab === 'diary' ? 'bg-[#FF7A24] text-white shadow-xs' : 'text-[#132A1F]/70 hover:text-[#132A1F]'
+            activeTab === 'symptoms' ? 'bg-[#FF7A24] text-white shadow-xs' : 'text-[#132A1F]/70 hover:text-[#132A1F]'
           }`}
         >
-          Symptom Diary
+          Symptoms ({symptoms.length})
+        </button>
+        <button
+          onClick={() => { setActiveTab('medicines'); setSearchQuery(''); }}
+          className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all ${
+            activeTab === 'medicines' ? 'bg-[#FF7A24] text-white shadow-xs' : 'text-[#132A1F]/70 hover:text-[#132A1F]'
+          }`}
+        >
+          Medicines ({activeMeds.length})
         </button>
         <button
           onClick={() => setActiveTab('trends')}
@@ -178,20 +372,20 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
             activeTab === 'trends' ? 'bg-[#FF7A24] text-white shadow-xs' : 'text-[#132A1F]/70 hover:text-[#132A1F]'
           }`}
         >
-          Trends & Patterns
+          Trends
         </button>
       </div>
 
-      {/* TAB 1: SYMPTOM DIARY */}
-      {activeTab === 'diary' && (
+      {/* ================= TAB 1: SYMPTOMS & DISORDERS ================= */}
+      {activeTab === 'symptoms' && (
         <div className="space-y-4">
-          {/* Search & Filter */}
+          {/* Search & Category Filters */}
           <div className="space-y-2">
             <div className="relative">
               <Search className="w-4 h-4 text-[#132A1F]/40 absolute left-3.5 top-3" />
               <input
                 type="text"
-                placeholder="Search symptoms, notes, or triggers..."
+                placeholder="Search symptoms, conditions, notes, or triggers..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-white border border-[#132A1F]/15 rounded-2xl pl-10 pr-4 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#FF7A24]"
@@ -225,16 +419,16 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
             </div>
           </div>
 
-          {/* List of Symptoms */}
+          {/* List of Symptoms & Conditions */}
           {filteredSymptoms.length === 0 ? (
             <div className="bg-white rounded-3xl p-8 border border-[#132A1F]/10 text-center space-y-3">
               <EmptyStateIllustration type="symptoms" />
               <h4 className="text-sm font-bold text-[#132A1F] font-display">No symptoms recorded yet</h4>
               <p className="text-xs text-[#132A1F]/60 max-w-sm mx-auto leading-relaxed">
-                Log sensations like fatigue, joint pain, brain fog, or gut changes to build your personal clinical timeline and detect triggers.
+                Log sensations like fatigue, joint pain, brain fog, or diagnosed medical conditions to build your personal clinical timeline.
               </p>
               <button
-                onClick={() => setShowLogModal(true)}
+                onClick={openAddSymptomModal}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/20 transition-all font-display"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -258,26 +452,40 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
                   >
                     <div className="flex items-start justify-between">
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-bold text-[#132A1F] font-display">
                             {log.name}
                           </span>
+                          {log.isCondition && (
+                            <span className="text-[10px] bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded-full font-bold">
+                              Diagnosed Condition
+                            </span>
+                          )}
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${severityColor}`}>
                             Severity: {log.intensity}/10
                           </span>
                         </div>
                         <div className="text-[10px] text-[#132A1F]/50 mt-0.5">
-                          {log.date} · {log.time} · {log.category.replace('_', ' ')}
+                          {log.date} {log.time && `· ${log.time}`} · {log.category.replace('_', ' ')}
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => onDeleteSymptom(log.id)}
-                        className="text-[#132A1F]/40 hover:text-red-500 transition-colors p-1"
-                        title="Delete entry"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openEditSymptomModal(log)}
+                          className="w-7 h-7 rounded-full bg-[#F8F6F0] hover:bg-[#FFE0C8] text-[#132A1F]/60 hover:text-[#FF7A24] flex items-center justify-center transition-colors"
+                          title="Edit record"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onDeleteSymptom(log.id)}
+                          className="w-7 h-7 rounded-full bg-[#F8F6F0] hover:bg-red-50 text-[#132A1F]/40 hover:text-red-500 flex items-center justify-center transition-colors"
+                          title="Delete entry"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     {log.notes && (
@@ -318,7 +526,183 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
         </div>
       )}
 
-      {/* TAB 2: TRENDS & PATTERNS */}
+      {/* ================= TAB 2: MEDICINE MANAGEMENT ================= */}
+      {activeTab === 'medicines' && (
+        <div className="space-y-4">
+          {/* Sub-tab: Active vs Past Medications */}
+          <div className="flex items-center justify-between border-b border-[#132A1F]/10 pb-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setMedTab('active')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  medTab === 'active'
+                    ? 'bg-[#132A1F] text-white shadow-xs'
+                    : 'bg-white text-[#132A1F]/70 border border-[#132A1F]/10 hover:bg-[#F8F6F0]'
+                }`}
+              >
+                Active Regimens ({activeMeds.length})
+              </button>
+              <button
+                onClick={() => setMedTab('past')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all ${
+                  medTab === 'past'
+                    ? 'bg-[#132A1F] text-white shadow-xs'
+                    : 'bg-white text-[#132A1F]/70 border border-[#132A1F]/10 hover:bg-[#F8F6F0]'
+                }`}
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>Discontinued / Past ({pastMeds.length})</span>
+              </button>
+            </div>
+
+            <span className="text-[11px] text-[#132A1F]/50 font-medium">
+              {filteredMeds.length} items
+            </span>
+          </div>
+
+          {/* Search box for medicines */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-[#132A1F]/40 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              placeholder="Search medication name, dosage, condition..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-white border border-[#132A1F]/15 rounded-2xl pl-10 pr-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#FF7A24]"
+            />
+          </div>
+
+          {/* List of Medications */}
+          {filteredMeds.length === 0 ? (
+            <div className="bg-white rounded-3xl p-8 border border-[#132A1F]/10 text-center space-y-3">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-[#FFF4EB] border border-[#FFE0C8] flex items-center justify-center text-[#FF7A24]">
+                <Pill className="w-6 h-6" />
+              </div>
+              <h4 className="text-sm font-bold text-[#132A1F] font-display">
+                {medTab === 'active' ? 'No active medications recorded' : 'No past medications recorded'}
+              </h4>
+              <p className="text-xs text-[#132A1F]/60 max-w-sm mx-auto leading-relaxed">
+                Record prescriptions, supplements, dosage, and schedules so you have an accurate medication history for clinical visits.
+              </p>
+              {medTab === 'active' && (
+                <button
+                  onClick={openAddMedModal}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/20 transition-all font-display"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>Add First Medication</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredMeds.map((med) => (
+                <div
+                  key={med.id}
+                  className={`bg-white rounded-2xl p-4.5 border transition-all shadow-xs ${
+                    med.status === 'discontinued'
+                      ? 'border-[#132A1F]/10 opacity-75'
+                      : 'border-[#132A1F]/10 hover:border-[#FF7A24]/30'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div className="w-10 h-10 rounded-2xl bg-[#FFF4EB] border border-[#FFE0C8] flex items-center justify-center text-[#FF7A24] shrink-0 mt-0.5">
+                        <Pill className="w-5 h-5" />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-xs font-bold text-[#132A1F] font-display">
+                            {med.name}
+                          </h4>
+                          <span className="text-[10px] bg-[#E8EFE9] text-[#132A1F] font-bold px-2 py-0.5 rounded-full">
+                            {med.dosage}
+                          </span>
+                          <span className="text-[10px] bg-[#F8F6F0] text-[#132A1F]/70 px-2 py-0.5 rounded-full">
+                            {med.category}
+                          </span>
+                          {med.isAsNeeded && (
+                            <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">
+                              PRN / As Needed
+                            </span>
+                          )}
+                          {med.status === 'discontinued' && (
+                            <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">
+                              Discontinued
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-[11px] text-[#132A1F]/60 mt-1 flex items-center gap-2 flex-wrap">
+                          <span>Frequency: {med.frequency || med.timeSlot}</span>
+                          {med.startDate && <span>· Started: {med.startDate}</span>}
+                          {med.endDate && <span>· Ended: {med.endDate}</span>}
+                        </div>
+
+                        {med.associatedCondition && (
+                          <div className="text-[11px] text-[#FF7A24] font-medium mt-1">
+                            Associated with: {med.associatedCondition}
+                          </div>
+                        )}
+
+                        {med.instructions && (
+                          <p className="text-[11px] text-[#132A1F]/70 mt-1.5 bg-[#FAF8F5] p-2 rounded-lg italic">
+                            "{med.instructions}"
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => openEditMedModal(med)}
+                        className="w-7 h-7 rounded-full bg-[#F8F6F0] hover:bg-[#FFE0C8] text-[#132A1F]/60 hover:text-[#FF7A24] flex items-center justify-center transition-colors"
+                        title="Edit medicine"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+
+                      {med.status !== 'discontinued' ? (
+                        <button
+                          onClick={() => handleDiscontinueMed(med.id)}
+                          className="px-2.5 py-1 rounded-full bg-[#F8F6F0] hover:bg-amber-50 text-[#132A1F]/60 hover:text-amber-700 text-[10px] font-bold transition-colors"
+                          title="Discontinue medicine"
+                        >
+                          Discontinue
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            med.status = 'active';
+                            med.endDate = undefined;
+                            storageService.saveMedication(med);
+                            setMedications(storageService.getMedications());
+                          }}
+                          className="px-2.5 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[10px] font-bold transition-colors"
+                        >
+                          Reactivate
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => handleDeleteMed(med.id)}
+                        className="w-7 h-7 rounded-full bg-[#F8F6F0] hover:bg-red-50 text-[#132A1F]/40 hover:text-red-500 flex items-center justify-center transition-colors"
+                        title="Delete medicine"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================= TAB 3: TRENDS & PATTERNS ================= */}
       {activeTab === 'trends' && (
         <div className="space-y-4">
           <div className="bg-white rounded-3xl p-5 border border-[#132A1F]/10 shadow-xs space-y-4">
@@ -368,13 +752,13 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
             <div className="space-y-1">
               <h4 className="text-sm font-bold text-[#132A1F] font-display">Longitudinal Health Timeline</h4>
               <p className="text-xs text-[#132A1F]/60 max-w-xs">
-                All symptom intensities are preserved chronologically with timestamps for doctor appointments.
+                All symptom intensities and medications are preserved chronologically for doctor appointments.
               </p>
               <button
                 onClick={onExportSummary}
                 className="mt-2 text-xs text-[#FF7A24] font-bold hover:underline inline-flex items-center gap-1"
               >
-                <span>Generate Clinical PDF / Summary</span>
+                <span>Generate Clinical Summary</span>
                 <span>→</span>
               </button>
             </div>
@@ -385,8 +769,8 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
         </div>
       )}
 
-      {/* Log Symptom Modal */}
-      {showLogModal && (
+      {/* ================= MODAL: LOG / EDIT SYMPTOM OR CONDITION ================= */}
+      {showSymptomModal && (
         <div className="fixed inset-0 z-50 bg-[#132A1F]/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-[#FAF8F5] w-full max-w-md max-h-[90vh] rounded-3xl p-6 shadow-2xl border border-[#132A1F]/10 overflow-y-auto space-y-4 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-2 border-b border-[#132A1F]/10">
@@ -394,10 +778,12 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
                 <div className="w-8 h-8 rounded-xl bg-[#FFF4EB] flex items-center justify-center text-[#FF7A24]">
                   <Activity className="w-4 h-4" />
                 </div>
-                <h3 className="text-base font-bold text-[#132A1F] font-display">Log a Symptom</h3>
+                <h3 className="text-base font-bold text-[#132A1F] font-display">
+                  {editingSymptom ? 'Edit Health Record' : 'Record Symptom / Condition'}
+                </h3>
               </div>
               <button
-                onClick={() => setShowLogModal(false)}
+                onClick={() => setShowSymptomModal(false)}
                 className="w-7 h-7 rounded-full bg-[#E8EFE9] flex items-center justify-center text-[#132A1F]/70 hover:bg-[#d8e3da]"
               >
                 ✕
@@ -405,52 +791,77 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
             </div>
 
             <form onSubmit={handleSaveSymptom} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#132A1F] mb-1.5">Category</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {symptomCategories.map((cat) => (
-                    <button
-                      type="button"
-                      key={cat.id}
-                      onClick={() => {
-                        setCategory(cat.id);
-                        if (cat.id === 'fatigue') setName('Persistent Fatigue');
-                        else if (cat.id === 'pain') setName('Joint or Muscle Aches');
-                        else if (cat.id === 'brain_fog') setName('Brain Fog / Concentration');
-                        else if (cat.id === 'sleep') setName('Non-Restorative Sleep');
-                        else if (cat.id === 'digestive') setName('Abdominal Discomfort');
-                        else setName('');
-                      }}
-                      className={`p-2 rounded-xl text-left text-xs font-semibold border transition-all ${
-                        category === cat.id
-                          ? 'bg-[#FF7A24] text-white border-[#FF7A24] shadow-xs'
-                          : 'bg-white text-[#132A1F] border-[#132A1F]/10 hover:bg-[#F8F6F0]'
-                      }`}
-                    >
-                      {cat.label}
-                    </button>
-                  ))}
-                </div>
+              {/* Type Switcher: Acute Symptom vs Chronic Condition */}
+              <div className="flex items-center p-1 bg-[#E8EFE9] rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setIsCondition(false)}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    !isCondition ? 'bg-[#FF7A24] text-white shadow-xs' : 'text-[#132A1F]/70'
+                  }`}
+                >
+                  Acute Symptom
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCondition(true)}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    isCondition ? 'bg-[#FF7A24] text-white shadow-xs' : 'text-[#132A1F]/70'
+                  }`}
+                >
+                  Diagnosed Disorder / Condition
+                </button>
               </div>
+
+              {!isCondition && (
+                <div>
+                  <label className="block text-xs font-bold text-[#132A1F] mb-1.5">Category</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {symptomCategories.filter(c => c.id !== 'condition').map((cat) => (
+                      <button
+                        type="button"
+                        key={cat.id}
+                        onClick={() => {
+                          setCategory(cat.id);
+                          if (cat.id === 'fatigue') setName('Persistent Fatigue');
+                          else if (cat.id === 'pain') setName('Joint or Muscle Aches');
+                          else if (cat.id === 'brain_fog') setName('Brain Fog / Concentration');
+                          else if (cat.id === 'sleep') setName('Non-Restorative Sleep');
+                          else if (cat.id === 'digestive') setName('Abdominal Discomfort');
+                          else setName('');
+                        }}
+                        className={`p-2 rounded-xl text-left text-xs font-semibold border transition-all ${
+                          category === cat.id
+                            ? 'bg-[#FF7A24] text-white border-[#FF7A24] shadow-xs'
+                            : 'bg-white text-[#132A1F] border-[#132A1F]/10 hover:bg-[#F8F6F0]'
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-[#132A1F] mb-1">
-                  Symptom Name
+                  {isCondition ? 'Medical Condition / Disorder Name *' : 'Symptom Name *'}
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Brain fog, Post-exertional crash, Migraine"
+                  placeholder={isCondition ? "e.g. POTS, ME/CFS, Fibromyalgia, Endometriosis" : "e.g. Brain fog, Post-exertional crash, Migraine"}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
                 />
               </div>
 
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-xs font-bold text-[#132A1F]">Intensity Severity</label>
-                  <span className="text-xs font-bold text-[#FF7A24]">{intensity} / 10</span>
+              {/* Severity Slider */}
+              <div className="bg-white p-3.5 rounded-2xl border border-[#132A1F]/10 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-[#132A1F]">
+                  <span>Severity Rating</span>
+                  <span className="text-[#FF7A24] font-display text-sm">{intensity} / 10</span>
                 </div>
                 <input
                   type="range"
@@ -460,16 +871,18 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
                   onChange={(e) => setIntensity(Number(e.target.value))}
                   className="w-full accent-[#FF7A24]"
                 />
-                <div className="flex justify-between text-[10px] text-[#132A1F]/50 mt-1">
-                  <span>1 (Mild flutter)</span>
-                  <span>5 (Noticeable impact)</span>
-                  <span>10 (Debilitating)</span>
+                <div className="flex justify-between text-[10px] text-[#132A1F]/50">
+                  <span>1 - Mild / Manageable</span>
+                  <span>5 - Disruptive</span>
+                  <span>10 - Severe / Debilitating</span>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] font-bold text-[#132A1F] mb-1">Date</label>
+                  <label className="block text-[11px] font-bold text-[#132A1F] mb-1">
+                    {isCondition ? 'Diagnosed Date' : 'Date'}
+                  </label>
                   <input
                     type="date"
                     value={date}
@@ -478,7 +891,9 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-[#132A1F] mb-1">Time</label>
+                  <label className="block text-[11px] font-bold text-[#132A1F] mb-1">
+                    Time
+                  </label>
                   <input
                     type="time"
                     value={time}
@@ -488,46 +903,48 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#132A1F] mb-1.5">Context Tags</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {availableTags.map((tag) => (
-                    <button
-                      type="button"
-                      key={tag}
-                      onClick={() => toggleTag(tag)}
-                      className={`text-[10px] px-2.5 py-1 rounded-full font-semibold border transition-all ${
-                        selectedTags.includes(tag)
-                          ? 'bg-[#FF7A24] text-white border-[#FF7A24]'
-                          : 'bg-white text-[#132A1F]/70 border-[#132A1F]/15 hover:bg-[#F8F6F0]'
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
+              {!isCondition && (
+                <div>
+                  <label className="block text-xs font-bold text-[#132A1F] mb-1.5">Context Tags</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {availableTags.map((tag) => (
+                      <button
+                        type="button"
+                        key={tag}
+                        onClick={() => toggleTag(tag)}
+                        className={`text-[11px] px-2.5 py-1 rounded-full font-semibold border transition-all ${
+                          selectedTags.includes(tag)
+                            ? 'bg-[#FF7A24] text-white border-[#FF7A24]'
+                            : 'bg-white text-[#132A1F]/70 border-[#132A1F]/15 hover:bg-[#F8F6F0]'
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-[#132A1F] mb-1">
-                  Triggers (Optional, comma-separated)
+                  Triggers or Context (Optional)
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Standing 20 mins, Missed lunch, Cold wind"
+                  placeholder="e.g. Standing up quickly, heavy meal, hot shower, stress"
                   value={triggers}
                   onChange={(e) => setTriggers(e.target.value)}
-                  className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-[#132A1F] mb-1">
-                  Detailed Notes & Physical Sensation
+                  Clinical Notes & Impact
                 </label>
                 <textarea
                   rows={2}
-                  placeholder="How did this symptom feel? Did anything provide relief?"
+                  placeholder="Describe sensation, pain quality (throbbing, burning), duration, or limitation..."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full bg-white border border-[#132A1F]/20 rounded-xl p-3 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none resize-none"
@@ -537,7 +954,7 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowLogModal(false)}
+                  onClick={() => setShowSymptomModal(false)}
                   className="px-4 py-2 rounded-full text-xs font-semibold text-[#132A1F]/70 hover:bg-[#E8EFE9]"
                 >
                   Cancel
@@ -546,7 +963,194 @@ export const SymptomsScreen: React.FC<SymptomsScreenProps> = ({
                   type="submit"
                   className="px-6 py-2.5 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
                 >
-                  Save Symptom Log
+                  {editingSymptom ? 'Update Record' : 'Save Record'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: ADD / EDIT MEDICATION ================= */}
+      {showMedModal && (
+        <div className="fixed inset-0 z-50 bg-[#132A1F]/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#FAF8F5] w-full max-w-md max-h-[90vh] rounded-3xl p-6 shadow-2xl border border-[#132A1F]/10 overflow-y-auto space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-2 border-b border-[#132A1F]/10">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#FFF4EB] flex items-center justify-center text-[#FF7A24]">
+                  <Pill className="w-4 h-4" />
+                </div>
+                <h3 className="text-base font-bold text-[#132A1F] font-display">
+                  {editingMed ? 'Edit Medication' : 'Add Medication / Supplement'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowMedModal(false)}
+                className="w-7 h-7 rounded-full bg-[#E8EFE9] flex items-center justify-center text-[#132A1F]/70 hover:bg-[#d8e3da]"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveMedication} className="space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-bold text-[#132A1F] mb-1">
+                    Medicine Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Fludrocortisone, CoQ10"
+                    value={medName}
+                    onChange={(e) => setMedName(e.target.value)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#132A1F] mb-1">
+                    Dosage *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 0.1 mg, 200 mg"
+                    value={dosage}
+                    onChange={(e) => setDosage(e.target.value)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-bold text-[#132A1F] mb-1">
+                    Frequency
+                  </label>
+                  <select
+                    value={frequency}
+                    onChange={(e) => setFrequency(e.target.value)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  >
+                    <option value="Once daily">Once daily</option>
+                    <option value="Twice daily">Twice daily</option>
+                    <option value="Three times daily">Three times daily</option>
+                    <option value="Every 8 hours">Every 8 hours</option>
+                    <option value="As needed (PRN)">As needed (PRN)</option>
+                    <option value="Weekly">Weekly</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#132A1F] mb-1">
+                    Primary Time Slot
+                  </label>
+                  <select
+                    value={timeSlot}
+                    onChange={(e) => setTimeSlot(e.target.value as any)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  >
+                    <option value="Morning">Morning</option>
+                    <option value="Afternoon">Afternoon</option>
+                    <option value="Evening">Evening</option>
+                    <option value="Bedtime">Bedtime</option>
+                    <option value="As Needed">As Needed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-bold text-[#132A1F] mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={medCategory}
+                    onChange={(e) => setMedCategory(e.target.value as any)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  >
+                    <option value="Prescription">Prescription</option>
+                    <option value="Supplement">Supplement / Vitamin</option>
+                    <option value="OTC">Over-The-Counter</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#132A1F] mb-1">
+                    Associated Condition
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. POTS, Migraine, Sleep"
+                    value={associatedCondition}
+                    onChange={(e) => setAssociatedCondition(e.target.value)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#132A1F] mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-2.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#132A1F] mb-1">
+                    End Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-2.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#132A1F] mb-1">
+                  Instructions & Clinical Notes (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Take with 500ml water and breakfast. Do not take within 2 hours of iron."
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  className="w-full bg-white border border-[#132A1F]/20 rounded-xl p-3 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="asNeededCheck"
+                  checked={isAsNeeded}
+                  onChange={(e) => setIsAsNeeded(e.target.checked)}
+                  className="rounded border-[#132A1F]/30 text-[#FF7A24] focus:ring-[#FF7A24]"
+                />
+                <label htmlFor="asNeededCheck" className="text-xs font-bold text-[#132A1F]">
+                  Take only as needed (PRN) for flare-ups
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMedModal(false)}
+                  className="px-4 py-2 rounded-full text-xs font-semibold text-[#132A1F]/70 hover:bg-[#E8EFE9]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
+                >
+                  {editingMed ? 'Update Medication' : 'Save Medication'}
                 </button>
               </div>
             </form>

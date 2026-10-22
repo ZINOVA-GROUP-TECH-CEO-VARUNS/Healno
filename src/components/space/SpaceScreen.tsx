@@ -7,22 +7,24 @@ import {
   Play,
   Pause,
   RotateCcw,
-  Clock,
   Sparkles,
-  Calendar,
   Trash2,
   CheckCircle2,
-  Activity,
+  Circle,
   Heart,
   Coffee,
   ShoppingBag,
   Home as HomeIcon,
   BookOpen,
   Footprints,
-  Sliders,
-  Filter,
+  Edit2,
+  Archive,
+  ArchiveRestore,
+  Target,
+  BarChart3,
+  Check,
 } from 'lucide-react';
-import { ActivityTrackerIllustration, EmptyStateIllustration } from '../common/CodeIllustrations';
+import { EmptyStateIllustration } from '../common/CodeIllustrations';
 
 interface SpaceScreenProps {
   onActivityLogged?: () => void;
@@ -31,16 +33,20 @@ interface SpaceScreenProps {
 
 export const SpaceScreen: React.FC<SpaceScreenProps> = ({
   onActivityLogged,
-  remainingSpoons = 12,
 }) => {
   const [activities, setActivities] = useState<ActivityEntry[]>(() => storageService.getActivities());
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [viewTab, setViewTab] = useState<'active' | 'archived'>('active');
   const [showLogModal, setShowLogModal] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<ActivityEntry | null>(null);
 
   // Form states
   const [activityCategory, setActivityCategory] = useState<ActivityEntry['category']>('personal_care');
   const [activityName, setActivityName] = useState('');
   const [durationMinutes, setDurationMinutes] = useState(15);
+  const [quantity, setQuantity] = useState<number | ''>('');
+  const [unit, setUnit] = useState('mins');
+  const [target, setTarget] = useState<number | ''>('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState(() => new Date().toTimeString().slice(0, 5));
   const [notes, setNotes] = useState('');
@@ -83,6 +89,11 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
       date: new Date().toISOString().split('T')[0],
       time: new Date().toTimeString().slice(0, 5),
       durationMinutes: elapsedMinutes,
+      quantity: elapsedMinutes,
+      unit: 'mins',
+      target: selectedTimerPreset,
+      completed: true,
+      archived: false,
       notes: 'Completed calming sensory rest session to recover biological energy.',
       createdAt: new Date().toISOString(),
     };
@@ -92,27 +103,92 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
     if (onActivityLogged) onActivityLogged();
   };
 
+  const openCreateModal = () => {
+    setEditingActivity(null);
+    setActivityCategory('personal_care');
+    setActivityName('');
+    setDurationMinutes(15);
+    setQuantity('');
+    setUnit('mins');
+    setTarget('');
+    setDate(new Date().toISOString().split('T')[0]);
+    setTime(new Date().toTimeString().slice(0, 5));
+    setNotes('');
+    setShowLogModal(true);
+  };
+
+  const openEditModal = (act: ActivityEntry) => {
+    setEditingActivity(act);
+    setActivityCategory(act.category);
+    setActivityName(act.activityName);
+    setDurationMinutes(act.durationMinutes || 15);
+    setQuantity(act.quantity !== undefined ? act.quantity : '');
+    setUnit(act.unit || 'mins');
+    setTarget(act.target !== undefined ? act.target : '');
+    setDate(act.date);
+    setTime(act.time || new Date().toTimeString().slice(0, 5));
+    setNotes(act.notes || '');
+    setShowLogModal(true);
+  };
+
   const handleSaveActivity = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activityName.trim()) return;
 
-    const newEntry: ActivityEntry = {
-      id: `act_${Date.now()}`,
-      category: activityCategory,
-      activityName: activityName.trim(),
-      date,
-      time,
-      durationMinutes: Number(durationMinutes) || 15,
-      notes: notes.trim(),
-      createdAt: new Date().toISOString(),
-    };
+    const numQty = quantity === '' ? undefined : Number(quantity);
+    const numTarget = target === '' ? undefined : Number(target);
+    const isCompleted = numTarget !== undefined && numQty !== undefined ? numQty >= numTarget : editingActivity?.completed || false;
 
-    storageService.addActivity(newEntry);
+    if (editingActivity) {
+      const updated: ActivityEntry = {
+        ...editingActivity,
+        category: activityCategory,
+        activityName: activityName.trim(),
+        date,
+        time,
+        durationMinutes: Number(durationMinutes) || 15,
+        quantity: numQty,
+        unit: unit.trim() || 'mins',
+        target: numTarget,
+        completed: isCompleted,
+        notes: notes.trim(),
+        updatedAt: new Date().toISOString(),
+      };
+      storageService.updateActivity(updated);
+    } else {
+      const newEntry: ActivityEntry = {
+        id: `act_${Date.now()}`,
+        category: activityCategory,
+        activityName: activityName.trim(),
+        date,
+        time,
+        durationMinutes: Number(durationMinutes) || 15,
+        quantity: numQty,
+        unit: unit.trim() || 'mins',
+        target: numTarget,
+        completed: isCompleted,
+        archived: false,
+        notes: notes.trim(),
+        createdAt: new Date().toISOString(),
+      };
+      storageService.addActivity(newEntry);
+    }
+
     setActivities(storageService.getActivities());
     setShowLogModal(false);
-    setActivityName('');
-    setNotes('');
+    setEditingActivity(null);
     if (onActivityLogged) onActivityLogged();
+  };
+
+  const handleToggleComplete = (id: string) => {
+    storageService.toggleActivityComplete(id);
+    setActivities(storageService.getActivities());
+    if (onActivityLogged) onActivityLogged();
+  };
+
+  const handleToggleArchive = (id: string) => {
+    storageService.toggleActivityArchive(id);
+    setActivities(storageService.getActivities());
   };
 
   const handleDeleteActivity = (id: string) => {
@@ -130,7 +206,10 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
     { id: 'custom', label: 'Custom Activity', icon: Sparkles },
   ];
 
-  const filteredActivities = activities.filter((a) => {
+  const activeActivities = activities.filter((a) => !a.archived);
+  const archivedActivities = activities.filter((a) => a.archived);
+
+  const displayedActivities = (viewTab === 'active' ? activeActivities : archivedActivities).filter((a) => {
     if (selectedCategory === 'all') return true;
     return a.category === selectedCategory;
   });
@@ -147,19 +226,19 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
         <div>
           <h2 className="text-xl font-bold text-[#132A1F] font-display flex items-center gap-2">
             <Compass className="w-5 h-5 text-[#FF7A24]" />
-            <span>Space & Activity Tracker</span>
+            <span>Activities & Pacing Space</span>
           </h2>
           <p className="text-xs text-[#132A1F]/60">
-            Log everyday activities, balance spoons, and cultivate intentional rest
+            Customize activities, set targets, and balance your physical energy
           </p>
         </div>
 
         <button
-          onClick={() => setShowLogModal(true)}
+          onClick={openCreateModal}
           className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
         >
           <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span>Log Activity</span>
+          <span>New Activity</span>
         </button>
       </div>
 
@@ -194,8 +273,8 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
         </div>
 
         {/* Circular Timer Visual Display */}
-        <div className="flex flex-col items-center justify-center py-3">
-          <div className="relative w-40 h-40 flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center py-2">
+          <div className="relative w-36 h-36 flex items-center justify-center">
             {/* SVG Progress Ring */}
             <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
               <circle
@@ -232,21 +311,21 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
           </div>
 
           {/* Timer Controls */}
-          <div className="flex items-center gap-3 mt-4">
+          <div className="flex items-center gap-2.5 mt-3">
             <button
               onClick={handleStartPause}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-bold text-white shadow-md transition-all active:scale-95 ${
+              className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold text-white shadow-md transition-all active:scale-95 ${
                 isTimerRunning ? 'bg-[#6B4435] hover:bg-[#573527]' : 'bg-[#FF7A24] hover:bg-[#E06516] shadow-[#FF7A24]/30'
               }`}
             >
               {isTimerRunning ? (
                 <>
-                  <Pause className="w-4 h-4 fill-white" />
+                  <Pause className="w-3.5 h-3.5 fill-white" />
                   <span>Pause</span>
                 </>
               ) : (
                 <>
-                  <Play className="w-4 h-4 fill-white" />
+                  <Play className="w-3.5 h-3.5 fill-white" />
                   <span>{timeLeft < timerDuration ? 'Resume Rest' : 'Begin Rest'}</span>
                 </>
               )}
@@ -254,16 +333,16 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
 
             <button
               onClick={() => handleResetTimer(selectedTimerPreset)}
-              className="p-2.5 rounded-full bg-[#F8F6F0] hover:bg-[#E8EFE9] text-[#132A1F]/70 transition-colors"
+              className="p-2 rounded-full bg-[#F8F6F0] hover:bg-[#E8EFE9] text-[#132A1F]/70 transition-colors"
               title="Reset Timer"
             >
-              <RotateCcw className="w-4 h-4" />
+              <RotateCcw className="w-3.5 h-3.5" />
             </button>
 
             {timeLeft < timerDuration && (
               <button
                 onClick={handleLogRestSession}
-                className="text-xs bg-[#E8EFE9] hover:bg-[#d8e3da] text-[#132A1F] font-bold px-3 py-2 rounded-full transition-colors"
+                className="text-xs bg-[#E8EFE9] hover:bg-[#d8e3da] text-[#132A1F] font-bold px-3 py-1.5 rounded-full transition-colors"
               >
                 Save Rest Log
               </button>
@@ -272,118 +351,209 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
         </div>
       </div>
 
-      {/* Category Filter Bar */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs font-bold text-[#132A1F]">
-          <span>Tracked Activities</span>
-          <span className="text-[#132A1F]/50 font-normal">{filteredActivities.length} logs</span>
-        </div>
-
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+      {/* View Tabs: Active vs Archived */}
+      <div className="flex items-center justify-between border-b border-[#132A1F]/10 pb-2">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setSelectedCategory('all')}
-            className={`whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              selectedCategory === 'all'
+            onClick={() => setViewTab('active')}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+              viewTab === 'active'
                 ? 'bg-[#132A1F] text-white shadow-xs'
                 : 'bg-white text-[#132A1F]/70 border border-[#132A1F]/10 hover:bg-[#F8F6F0]'
             }`}
           >
-            All Activities
+            Active Activities ({activeActivities.length})
           </button>
-          {categories.map((cat) => {
-            const Icon = cat.icon;
-            const isSelected = selectedCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                  isSelected
-                    ? 'bg-[#FF7A24] text-white shadow-xs'
-                    : 'bg-white text-[#132A1F]/70 border border-[#132A1F]/10 hover:bg-[#F8F6F0]'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{cat.label}</span>
-              </button>
-            );
-          })}
+          <button
+            onClick={() => setViewTab('archived')}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all ${
+              viewTab === 'archived'
+                ? 'bg-[#132A1F] text-white shadow-xs'
+                : 'bg-white text-[#132A1F]/70 border border-[#132A1F]/10 hover:bg-[#F8F6F0]'
+            }`}
+          >
+            <Archive className="w-3.5 h-3.5" />
+            <span>Archived ({archivedActivities.length})</span>
+          </button>
         </div>
+
+        <span className="text-[11px] text-[#132A1F]/50 font-medium">
+          {displayedActivities.length} items
+        </span>
       </div>
 
-      {/* Activities Feed / Empty State */}
-      {filteredActivities.length === 0 ? (
+      {/* Category Filter Bar */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+        <button
+          onClick={() => setSelectedCategory('all')}
+          className={`whitespace-nowrap px-3 py-1 rounded-full text-[11px] font-semibold transition-all ${
+            selectedCategory === 'all'
+              ? 'bg-[#FF7A24] text-white shadow-xs'
+              : 'bg-white text-[#132A1F]/70 border border-[#132A1F]/10 hover:bg-[#F8F6F0]'
+          }`}
+        >
+          All
+        </button>
+        {categories.map((cat) => {
+          const Icon = cat.icon;
+          const isSelected = selectedCategory === cat.id;
+          return (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 transition-all ${
+                isSelected
+                  ? 'bg-[#FF7A24] text-white shadow-xs'
+                  : 'bg-white text-[#132A1F]/70 border border-[#132A1F]/10 hover:bg-[#F8F6F0]'
+              }`}
+            >
+              <Icon className="w-3 h-3" />
+              <span>{cat.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Activities Feed */}
+      {displayedActivities.length === 0 ? (
         <div className="bg-white rounded-3xl p-8 border border-[#132A1F]/10 text-center space-y-3">
           <EmptyStateIllustration type="tasks" />
-          <h4 className="text-sm font-bold text-[#132A1F] font-display">No activities logged yet</h4>
+          <h4 className="text-sm font-bold text-[#132A1F] font-display">
+            {viewTab === 'active' ? 'No active activities found' : 'No archived activities'}
+          </h4>
           <p className="text-xs text-[#132A1F]/60 max-w-sm mx-auto leading-relaxed">
-            Record personal care, chores, grocery runs, food prep, or rest sessions to see your actual daily exertion and pace your spoons.
+            {viewTab === 'active'
+              ? 'Customize activities with quantity goals, numerical targets, and completion tracking.'
+              : 'Activities you mark as archived will appear here for long-term health record review.'}
           </p>
-          <button
-            onClick={() => setShowLogModal(true)}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/20 transition-all font-display"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>Log Your First Activity</span>
-          </button>
+          {viewTab === 'active' && (
+            <button
+              onClick={openCreateModal}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/20 transition-all font-display"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Create an Activity</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredActivities.map((act) => {
+          {displayedActivities.map((act) => {
             const catMeta = categories.find((c) => c.id === act.category) || categories[0];
             const Icon = catMeta.icon;
+
+            const hasTarget = act.target !== undefined && act.target > 0;
+            const currentQty = act.quantity || 0;
+            const progressPercent = hasTarget ? Math.min(100, Math.round((currentQty / (act.target || 1)) * 100)) : 0;
+
             return (
               <div
                 key={act.id}
-                className="bg-white rounded-2xl p-4 border border-[#132A1F]/10 shadow-xs flex items-center justify-between hover:border-[#FF7A24]/30 transition-all"
+                className={`bg-white rounded-2xl p-4 border transition-all shadow-xs ${
+                  act.completed ? 'border-emerald-200 bg-emerald-50/20' : 'border-[#132A1F]/10 hover:border-[#FF7A24]/30'
+                }`}
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-[#FFF4EB] border border-[#FFE0C8] flex items-center justify-center text-[#FF7A24] shrink-0">
-                    <Icon className="w-5 h-5" />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    {/* Completion Checkbox Button */}
+                    <button
+                      onClick={() => handleToggleComplete(act.id)}
+                      className={`mt-0.5 w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                        act.completed
+                          ? 'bg-emerald-600 text-white'
+                          : 'border-2 border-[#132A1F]/30 hover:border-[#FF7A24] text-transparent'
+                      }`}
+                      title={act.completed ? 'Mark incomplete' : 'Mark completed'}
+                    >
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    </button>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className={`text-xs font-bold ${act.completed ? 'line-through text-[#132A1F]/60' : 'text-[#132A1F]'}`}>
+                          {act.activityName}
+                        </h4>
+                        <span className="text-[10px] bg-[#E8EFE9] text-[#132A1F] px-2 py-0.5 rounded-full font-semibold">
+                          {act.durationMinutes || 15}m
+                        </span>
+                        {hasTarget && (
+                          <span className="text-[10px] bg-[#FFF4EB] text-[#FF7A24] border border-[#FFE0C8] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                            <Target className="w-2.5 h-2.5" />
+                            <span>
+                              {currentQty} / {act.target} {act.unit || 'units'}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 text-[10px] text-[#132A1F]/50 mt-1">
+                        <span>{act.date}</span>
+                        {act.time && <span>· {act.time}</span>}
+                        <span>· {catMeta.label}</span>
+                      </div>
+
+                      {hasTarget && (
+                        <div className="mt-2.5 w-full bg-[#F1EFE9] rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              progressPercent >= 100 ? 'bg-emerald-500' : 'bg-[#FF7A24]'
+                            }`}
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                        </div>
+                      )}
+
+                      {act.notes && (
+                        <p className="text-[11px] text-[#132A1F]/70 mt-1.5 line-clamp-2 italic">
+                          "{act.notes}"
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-xs font-bold text-[#132A1F]">{act.activityName}</h4>
-                      <span className="text-[10px] bg-[#E8EFE9] text-[#132A1F] px-2 py-0.2 rounded-full font-semibold">
-                        {act.durationMinutes || 15}m
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-[10px] text-[#132A1F]/50 mt-0.5">
-                      <span>{act.date}</span>
-                      {act.time && <span>· {act.time}</span>}
-                      <span>· {catMeta.label}</span>
-                    </div>
-                    {act.notes && (
-                      <p className="text-[11px] text-[#132A1F]/70 mt-1 line-clamp-1 italic">
-                        "{act.notes}"
-                      </p>
-                    )}
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => openEditModal(act)}
+                      className="w-7 h-7 rounded-full bg-[#F8F6F0] hover:bg-[#FFE0C8] text-[#132A1F]/60 hover:text-[#FF7A24] flex items-center justify-center transition-colors"
+                      title="Edit activity"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => handleToggleArchive(act.id)}
+                      className="w-7 h-7 rounded-full bg-[#F8F6F0] hover:bg-[#E8EFE9] text-[#132A1F]/60 hover:text-[#132A1F] flex items-center justify-center transition-colors"
+                      title={act.archived ? 'Restore to Active' : 'Archive activity'}
+                    >
+                      {act.archived ? <ArchiveRestore className="w-3 h-3" /> : <Archive className="w-3 h-3" />}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteActivity(act.id)}
+                      className="w-7 h-7 rounded-full bg-[#F8F6F0] hover:bg-red-50 text-[#132A1F]/40 hover:text-red-500 flex items-center justify-center transition-colors"
+                      title="Delete activity"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
                   </div>
                 </div>
-
-                <button
-                  onClick={() => handleDeleteActivity(act.id)}
-                  className="w-8 h-8 rounded-full bg-[#F8F6F0] hover:bg-red-50 text-[#132A1F]/40 hover:text-red-500 flex items-center justify-center transition-colors"
-                  title="Delete activity"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
               </div>
             );
           })}
         </div>
       )}
 
-      {/* Log Activity Modal */}
+      {/* Log / Edit Activity Modal */}
       {showLogModal && (
         <div className="fixed inset-0 z-50 bg-[#132A1F]/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#FAF8F5] w-full max-w-md rounded-3xl p-6 shadow-2xl border border-[#132A1F]/10 space-y-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-[#FAF8F5] w-full max-w-md rounded-3xl p-6 shadow-2xl border border-[#132A1F]/10 space-y-4 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-[#132A1F]/10">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-[#FFF4EB] flex items-center justify-center text-[#FF7A24]">
                   <Compass className="w-4 h-4" />
                 </div>
-                <h3 className="text-base font-bold text-[#132A1F] font-display">Log Daily Activity</h3>
+                <h3 className="text-base font-bold text-[#132A1F] font-display">
+                  {editingActivity ? 'Edit Activity' : 'Create & Log Activity'}
+                </h3>
               </div>
               <button
                 onClick={() => setShowLogModal(false)}
@@ -421,16 +591,66 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-[#132A1F] mb-1">
-                  Activity Name
+                  Activity Name *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Folding laundry, Grocery walk, Gentle stretch"
+                  placeholder="e.g. Walking, Hydration, Gentle Stretching, Laundry"
                   value={activityName}
                   onChange={(e) => setActivityName(e.target.value)}
                   className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
                 />
+              </div>
+
+              {/* Quantities & Numerical Targets */}
+              <div className="bg-[#FFF8F2] p-3.5 rounded-2xl border border-[#FFE0C8] space-y-2.5">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[#132A1F]">
+                  <Target className="w-3.5 h-3.5 text-[#FF7A24]" />
+                  <span>Target & Measurement (Optional)</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#132A1F]/70 mb-1">
+                      Current Qty
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="e.g. 3500"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
+                      className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#132A1F]/70 mb-1">
+                      Target Goal
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="e.g. 5000"
+                      value={target}
+                      onChange={(e) => setTarget(e.target.value === '' ? '' : Number(e.target.value))}
+                      className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#132A1F]/70 mb-1">
+                      Unit
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="steps, cups, mins"
+                      value={unit}
+                      onChange={(e) => setUnit(e.target.value)}
+                      className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
@@ -473,7 +693,7 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-[#132A1F] mb-1">
-                  Notes or Physical Sensations (Optional)
+                  Notes or Sensations (Optional)
                 </label>
                 <textarea
                   rows={2}
@@ -496,7 +716,7 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
                   type="submit"
                   className="px-6 py-2.5 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
                 >
-                  Save Activity Log
+                  {editingActivity ? 'Update Activity' : 'Save Activity'}
                 </button>
               </div>
             </form>
