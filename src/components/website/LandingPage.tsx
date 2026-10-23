@@ -3,7 +3,6 @@ import {
   Sparkles,
   ArrowRight,
   Shield,
-  Activity,
   Heart,
   Phone,
   FileText,
@@ -13,9 +12,7 @@ import {
   ChevronRight,
   Gauge,
   Users,
-  Download,
   WifiOff,
-  Smile,
 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
 import { HealnoLogo } from '../common/HealnoLogo';
@@ -54,15 +51,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
 
             <button
               onClick={() => onLaunchApp('login')}
-              className="hidden sm:inline-flex px-3.5 py-2 text-xs font-semibold text-[#132A1F] hover:bg-[#E8EFE9] rounded-full transition-colors"
+              className="px-3.5 py-2 text-xs font-semibold text-[#132A1F] hover:bg-[#E8EFE9] rounded-full transition-colors"
             >
-              Sign In
+              Login
             </button>
             <button
-              onClick={() => onLaunchApp('onboarding')}
-              className="px-4 py-2 text-xs font-bold text-white bg-[#132A1F] hover:bg-[#2D6A4F] rounded-full shadow-xs transition-all flex items-center gap-1.5 active:scale-95 font-display"
+              onClick={() => onLaunchApp('signup')}
+              className="px-4 py-2 text-xs font-bold text-white bg-[#FF7A24] hover:bg-[#E06516] rounded-full shadow-xs transition-all flex items-center gap-1.5 active:scale-95 font-display"
             >
-              <span>Launch App</span>
+              <span>Get Started</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -90,10 +87,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
             {/* CTAs */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 pt-2">
               <button
-                onClick={() => onLaunchApp('onboarding')}
-                className="py-3.5 px-7 rounded-full bg-[#E89D35] hover:bg-[#d88d25] text-white font-bold text-sm shadow-md shadow-[#E89D35]/25 active:scale-[0.98] transition-all flex items-center gap-2 font-display"
+                onClick={() => onLaunchApp('signup')}
+                className="py-3.5 px-7 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white font-bold text-sm shadow-md shadow-[#FF7A24]/25 active:scale-[0.98] transition-all flex items-center gap-2 font-display"
               >
-                <span>Get Started Free</span>
+                <span>Get Started</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
@@ -101,7 +98,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
                 onClick={() => onLaunchApp('login')}
                 className="py-3.5 px-6 rounded-full bg-white hover:bg-[#F8F6F0] text-[#132A1F] border border-[#132A1F]/15 font-semibold text-xs shadow-xs transition-colors flex items-center gap-2"
               >
-                <span>Open Live App</span>
+                <span>Login</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
 
@@ -182,12 +179,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
                   </div>
                 </div>
 
-                {/* Launch Button inside Mockup */}
+                {/* Get Started Button inside Mockup */}
                 <button
-                  onClick={() => onLaunchApp('onboarding')}
-                  className="w-full py-2.5 rounded-xl bg-[#132A1F] hover:bg-[#2D6A4F] text-white text-xs font-bold font-display flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                  onClick={() => onLaunchApp('signup')}
+                  className="w-full py-2.5 rounded-xl bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold font-display flex items-center justify-center gap-1.5 shadow-sm transition-colors"
                 >
-                  <span>Interact with Live App</span>
+                  <span>Get Started Free</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -368,10 +365,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
           <button
-            onClick={() => onLaunchApp('onboarding')}
-            className="py-3.5 px-8 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white font-bold text-sm shadow-lg shadow-[#FF7A24]/25 transition-all font-display"
+            onClick={() => onLaunchApp('signup')}
+            className="py-3.5 px-8 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white font-bold text-sm shadow-lg shadow-[#FF7A24]/25 transition-all font-display flex items-center gap-2 mx-auto"
           >
-            Open Healno Application
+            <span>Get Started</span>
+            <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </section>
