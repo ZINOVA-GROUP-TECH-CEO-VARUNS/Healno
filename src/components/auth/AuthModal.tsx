@@ -15,7 +15,8 @@ import {
 } from 'lucide-react';
 import { HealnoLogo } from '../common/HealnoLogo';
 import { WelcomeHealthcareIllustration } from '../common/CodeIllustrations';
-import { authService, getSupabaseConfig, setCustomSupabaseConfig } from '../../services/supabase';
+import { supabase } from '../../supabaseClient';
+import { getSupabaseConfig, setCustomSupabaseConfig } from '../../services/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -62,56 +63,64 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       if (authMode === 'signup') {
         const nameToUse = fullName.trim() || email.split('@')[0];
-        if (authService.isConfigured()) {
-          const { user, session, error } = await authService.signUp(email.trim(), password, nameToUse);
-          if (error) {
-            setErrorMsg(error);
-            setIsLoading(false);
-            return;
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: { name: nameToUse }
           }
-          onLoginSuccess({
-            id: user?.id,
-            email: user?.email || email.trim(),
-            name: nameToUse,
-            isAuthenticated: true,
-          });
-        } else {
-          // Local persistent fallback
-          onLoginSuccess({
-            email: email.trim(),
-            name: nameToUse,
-            isAuthenticated: true,
-          });
+        });
+
+        if (error) {
+          setErrorMsg(error.message);
+          setIsLoading(false);
+          return;
         }
+
+        if (!data.session) {
+          setSuccessMsg('Check your email and confirm your account before logging in.');
+          setIsLoading(false);
+          return;
+        }
+
+        onLoginSuccess({
+          id: data.user?.id,
+          email: data.user?.email || email.trim(),
+          name: nameToUse,
+          isAuthenticated: true,
+        });
         onClose();
+        window.location.href = '/';
       } else {
         // Sign In
-        if (authService.isConfigured()) {
-          const { user, error } = await authService.signIn(email.trim(), password);
-          if (error) {
-            setErrorMsg(error);
-            setIsLoading(false);
-            return;
-          }
-          const userMetadataName = user?.user_metadata?.name;
-          const fallbackName = user?.email?.split('@')[0] || 'Friend';
-          onLoginSuccess({
-            id: user?.id,
-            email: user?.email || email.trim(),
-            name: userMetadataName || fallbackName,
-            isAuthenticated: true,
-          });
-        } else {
-          // Local persistent fallback
-          const rawName = email.split('@')[0].replace(/[._]/g, ' ');
-          const computedName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-          onLoginSuccess({
-            email: email.trim(),
-            name: computedName || 'Friend',
-            isAuthenticated: true,
-          });
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+
+        if (error) {
+          setErrorMsg(error.message);
+          setIsLoading(false);
+          return;
         }
+
+        if (!data.session) {
+          setErrorMsg('Please check your email and confirm your account before signing in.');
+          setIsLoading(false);
+          return;
+        }
+
+        const user = data.user;
+        const userMetadataName = user?.user_metadata?.name;
+        const fallbackName = user?.email?.split('@')[0] || 'Friend';
+        onLoginSuccess({
+          id: user?.id,
+          email: user?.email || email.trim(),
+          name: userMetadataName || fallbackName,
+          isAuthenticated: true,
+        });
         onClose();
+        window.location.href = '/';
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Authentication error. Please try again.');
@@ -130,11 +139,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setIsLoading(true);
 
     try {
-      const { success, error } = await authService.resetPassword(email.trim());
-      if (success) {
-        setSuccessMsg('Password reset instructions have been dispatched to your email.');
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: window.location.origin,
+      });
+      if (error) {
+        setErrorMsg(error.message);
       } else {
-        setErrorMsg(error || 'Failed to dispatch reset email. Ensure Supabase credentials are configured.');
+        setSuccessMsg('Password reset instructions have been dispatched to your email.');
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to request password reset.');

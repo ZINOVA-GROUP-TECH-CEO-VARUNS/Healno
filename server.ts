@@ -1,6 +1,5 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
 import path from 'path';
 import dotenv from 'dotenv';
 
@@ -11,34 +10,20 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json({ limit: '15mb' }));
 
-// Shared Gemini SDK client on the server
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey
-  ? new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    })
-  : null;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY;
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', app: 'Healno', timestamp: new Date().toISOString(), aiReady: !!ai });
+  res.json({
+    status: 'ok',
+    app: 'Healno',
+    timestamp: new Date().toISOString(),
+    aiReady: !!OPENROUTER_API_KEY,
+    provider: 'OpenRouter',
+    model: OPENROUTER_MODEL,
+  });
 });
-
-// Helper to format conversation messages for Gemini API
-function formatGeminiContents(messages: any[]) {
-  if (!messages || messages.length === 0) {
-    return [{ role: 'user', parts: [{ text: 'Hello' }] }];
-  }
-  return messages.map((m: any) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content || '' }],
-  }));
-}
 
 function getSystemInstruction(userProfile?: any, healthContext?: any) {
   return `You are Healno AI Assistant, a versatile, highly capable, empathetic, and intelligent conversational assistant.
@@ -59,6 +44,126 @@ ${healthContext?.appointments?.length ? `Upcoming Appointments:\n- ${healthConte
 ${healthContext?.journalNotes?.length ? `Recent Journal Entries:\n- ${healthContext.journalNotes.join('\n- ')}` : ''}`;
 }
 
+async function callOpenRouter(messages: any[], systemInstruction?: string, jsonMode = false, signal?: AbortSignal) {
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY is not configured. Please set OPENROUTER_API_KEY in environment variables.');
+  }
+
+  const formattedMessages = [];
+  if (systemInstruction) {
+    formattedMessages.push({ role: 'system', content: systemInstruction });
+  }
+  for (const m of messages) {
+    formattedMessages.push({
+      role: m.role === 'model' || m.role === 'assistant' ? 'assistant' : 'user',
+      content: m.content || '',
+    });
+  }
+
+  const payload: any = {
+    model: OPENROUTER_MODEL,
+    messages: formattedMessages,
+    temperature: 0.7,
+  };
+
+  if (jsonMode) {
+    payload.response_format = { type: 'json_object' };
+  }
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'HTTP-Referer': process.env.APP_URL || 'https://healno-app.example',
+      'X-Title': 'Healno AI Assistant',
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`OpenRouter API error (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+async function streamOpenRouter(messages: any[], systemInstruction: string, onChunk: (text: string) => void, signal?: AbortSignal) {
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY is not configured. Please set OPENROUTER_API_KEY in environment variables.');
+  }
+
+  const formattedMessages = [];
+  if (systemInstruction) {
+    formattedMessages.push({ role: 'system', content: systemInstruction });
+  }
+  for (const m of messages) {
+    formattedMessages.push({
+      role: m.role === 'model' || m.role === 'assistant' ? 'assistant' : 'user',
+      content: m.content || '',
+    });
+  }
+
+  const payload = {
+    model: OPENROUTER_MODEL,
+    messages: formattedMessages,
+    temperature: 0.7,
+    stream: true,
+  };
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'HTTP-Referer': process.env.APP_URL || 'https://healno-app.example',
+      'X-Title': 'Healno AI Assistant',
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`OpenRouter stream error (${res.status}): ${errText}`);
+  }
+
+  if (!res.body) {
+    throw new Error('Response body missing for OpenRouter stream');
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data:')) continue;
+      const dataStr = trimmed.slice(5).trim();
+      if (dataStr === '[DONE]') break;
+
+      try {
+        const parsed = JSON.parse(dataStr);
+        const content = parsed.choices?.[0]?.delta?.content;
+        if (content) {
+          onChunk(content);
+        }
+      } catch {}
+    }
+  }
+}
+
 // Fast Streaming AI Chat Assistant Endpoint (Server-Sent Events)
 app.post('/api/chat/stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -68,15 +173,12 @@ app.post('/api/chat/stream', async (req, res) => {
 
   try {
     const { messages, userProfile, healthContext } = req.body;
-    const contents = formatGeminiContents(messages);
     const systemInstruction = getSystemInstruction(userProfile, healthContext);
 
-    if (!ai) {
-      // Fast simulated stream fallback when API key is unconfigured
+    if (!OPENROUTER_API_KEY) {
       const lastUserMsg = (messages && messages[messages.length - 1]?.content) || 'Hello';
-      const fallbackReply = `I am ready to help you with that! Regarding your inquiry "${lastUserMsg}": I can answer questions across general topics, science, daily tasks, lifestyle, or chronic health and energy pacing. Feel free to ask any follow-up questions!`;
-      const words = fallbackReply.split(' ');
-      for (const word of words) {
+      const fallbackReply = `Please configure OPENROUTER_API_KEY in your environment variables. Regarding "${lastUserMsg}": I am ready to assist once connected.`;
+      for (const word of fallbackReply.split(' ')) {
         res.write(`data: ${JSON.stringify({ text: word + ' ' })}\n\n`);
         await new Promise((r) => setTimeout(r, 20));
       }
@@ -84,51 +186,20 @@ app.post('/api/chat/stream', async (req, res) => {
       return res.end();
     }
 
-    let stream;
-    try {
-      stream = await ai.models.generateContentStream({
-        model: 'gemini-3.8-flash',
-        contents,
-        config: {
-          systemInstruction,
-          temperature: 0.7,
-        },
-      });
-    } catch (primaryErr: any) {
-      console.warn('Primary model error, attempting gemini-3.1-flash-lite fallback', primaryErr?.message);
-      try {
-        stream = await ai.models.generateContentStream({
-          model: 'gemini-3.1-flash-lite',
-          contents,
-          config: {
-            systemInstruction,
-            temperature: 0.7,
-          },
-        });
-      } catch (secondaryErr: any) {
-        console.warn('Fallback model error, utilizing intelligent natural stream generation', secondaryErr?.message);
-        const lastUserMsg = (messages && messages[messages.length - 1]?.content) || 'Hello';
-        const fallbackReply = `I'm here with you and ready to help! Regarding your question "${lastUserMsg}": Taking proactive, mindful steps is key. Feel free to ask more or share specific details so we can explore together.`;
-        for (const word of fallbackReply.split(' ')) {
-          res.write(`data: ${JSON.stringify({ text: word + ' ' })}\n\n`);
-          await new Promise((r) => setTimeout(r, 20));
-        }
-        res.write('data: [DONE]\n\n');
-        return res.end();
-      }
-    }
-
-    for await (const chunk of stream) {
-      if (chunk.text) {
-        res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
-      }
-    }
+    await streamOpenRouter(
+      messages || [],
+      systemInstruction,
+      (chunk) => {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      },
+      req.socket ? undefined : undefined
+    );
 
     res.write('data: [DONE]\n\n');
     res.end();
   } catch (error: any) {
     console.error('Error in /api/chat/stream:', error);
-    res.write(`data: ${JSON.stringify({ text: "I'm listening and right here with you. Please feel free to send your question again." })}\n\n`);
+    res.write(`data: ${JSON.stringify({ text: `I'm listening and right here with you. OpenRouter connection note: ${error.message}` })}\n\n`);
     res.write('data: [DONE]\n\n');
     res.end();
   }
@@ -138,32 +209,18 @@ app.post('/api/chat/stream', async (req, res) => {
 app.post('/api/chat', async (req, res) => {
   try {
     const { messages, userProfile, healthContext } = req.body;
-    const contents = formatGeminiContents(messages);
     const systemInstruction = getSystemInstruction(userProfile, healthContext);
 
-    if (!ai) {
-      const lastUserMsg = (messages && messages[messages.length - 1]?.content) || '';
-      return res.json({
-        reply: `I hear you and I'm ready to assist with any topic! You asked about: "${lastUserMsg}". Let me know what you'd like to explore next.`,
-        suggestedAction: null,
-      });
+    if (!OPENROUTER_API_KEY) {
+      return res.status(401).json({ reply: 'OPENROUTER_API_KEY is not configured.', suggestedAction: null });
     }
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents,
-      config: {
-        systemInstruction,
-        temperature: 0.7,
-      },
-    });
-
-    const reply = response.text || '';
+    const reply = await callOpenRouter(messages || [], systemInstruction);
     res.json({ reply, suggestedAction: null });
   } catch (error: any) {
     console.error('Error in /api/chat:', error);
     res.status(500).json({
-      reply: "I'm listening and I'm right here with you. A momentary connection issue occurred. Please feel free to retry your message.",
+      reply: "I'm listening and I'm right here with you. A momentary connection issue occurred with OpenRouter.",
       error: error.message,
     });
   }
@@ -174,64 +231,41 @@ app.post('/api/analyze-document', async (req, res) => {
   try {
     const { documentBase64, mimeType, filename } = req.body;
 
-    if (!ai) {
-      // Mock structured analysis for demo
+    if (!OPENROUTER_API_KEY) {
       return res.json({
         documentType: 'Lab Report',
         provider: 'Community Health Partners',
         date: new Date().toISOString().split('T')[0],
-        keyFindings: [
-          'Ferritin: 18 ng/mL (Borderline low range: 15-150)',
-          'Vitamin D (25-OH): 26 ng/mL (Mild insufficiency: 30-100)',
-          'Complete Blood Count (CBC): Within typical reference parameters',
-          'Thyroid Stimulating Hormone (TSH): 2.1 mIU/L (Within normal range)'
-        ],
-        plainLanguageSummary: 'This lab panel shows that while your general blood counts and thyroid function appear stable, your iron storage (ferritin) and vitamin D levels are on the lower side, which can commonly contribute to persistent tiredness and sluggish energy.',
-        suggestedDoctorQuestions: [
-          'Could my lower ferritin and vitamin D levels be contributing to my daily fatigue?',
-          'Do you recommend gentle dietary adjustments or specific supplement options?',
-          'When should we recheck these levels to see if there is improvement?'
-        ],
-        unverified: true
+        keyFindings: ['Document uploaded and saved successfully'],
+        plainLanguageSummary: 'Please configure OPENROUTER_API_KEY for automated AI document summarization and OCR analysis.',
+        suggestedDoctorQuestions: ['What do these results mean for my daily symptoms?'],
+        unverified: true,
       });
     }
 
-    let contents: any;
-    if (documentBase64 && mimeType && mimeType.startsWith('image/')) {
-      contents = {
-        parts: [
+    const imageUrl = documentBase64 && documentBase64.startsWith('data:') 
+      ? documentBase64 
+      : `data:${mimeType || 'image/jpeg'};base64,${documentBase64}`;
+
+    const messages = [
+      {
+        role: 'user',
+        content: [
           {
-            inlineData: {
-              data: documentBase64.replace(/^data:image\/\w+;base64,/, ''),
-              mimeType: mimeType || 'image/jpeg',
-            },
+            type: 'image_url',
+            image_url: { url: imageUrl }
           },
           {
-            text: `Analyze this medical document or lab report for the patient. Extract:
-1. Document Type (e.g., Lab Report, Imaging, Clinical Visit Summary, Prescription)
-2. Healthcare Provider or Facility
-3. Document Date
-4. Key Findings or Measurements (with reference ranges if noted)
-5. Plain Language Summary (explain clearly without medical jargon)
-6. 3-4 Thoughtful, empowering questions for the patient to ask their doctor
+            type: 'text',
+            text: `Analyze this medical document or lab report named "${filename || 'health_document'}". Extract structured fields in JSON format with keys: documentType, provider, date, keyFindings (array of strings), plainLanguageSummary, and suggestedDoctorQuestions (array of strings). Do not diagnose. Always mark unverified.`
+          }
+        ]
+      }
+    ];
 
-Important: Do NOT diagnose or declare medical conclusions. Emphasize that all extracted details are marked as unverified until reviewed with a licensed provider. Return in pure JSON.`,
-          },
-        ],
-      };
-    } else {
-      contents = `Analyze this medical document named "${filename || 'health_document'}". Extract structured fields including documentType, provider, date, keyFindings (array), plainLanguageSummary, and suggestedDoctorQuestions (array). Respond in JSON.`;
-    }
+    const responseText = await callOpenRouter(messages, 'You are a precise medical document analysis assistant that returns valid JSON.', true);
+    const parsed = JSON.parse(responseText || '{}');
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const parsed = JSON.parse(response.text || '{}');
     res.json({
       documentType: parsed.documentType || 'Medical Record',
       provider: parsed.provider || 'Healthcare Provider',
@@ -242,7 +276,7 @@ Important: Do NOT diagnose or declare medical conclusions. Emphasize that all ex
         'How do these results fit with my daily symptoms?',
         'Are there specific signs I should monitor going forward?'
       ],
-      unverified: true, // Always flagged unverified per requirements until user reviews
+      unverified: true,
     });
   } catch (error: any) {
     console.error('Error in /api/analyze-document:', error);
@@ -255,25 +289,16 @@ app.post('/api/doctor-prep', async (req, res) => {
   try {
     const { appointment, recentSymptoms, medications, notes } = req.body;
 
-    if (!ai) {
+    if (!OPENROUTER_API_KEY) {
       return res.json({
-        conciseBrief: `Upcoming visit with ${appointment?.provider || 'Healthcare Provider'} (${appointment?.purpose || 'Health Review'}). User is navigating symptoms including ${(recentSymptoms || []).slice(0, 3).map((s: any) => s.name || s).join(', ') || 'fatigue and fluctuating energy'}.`,
-        talkingPoints: [
-          'Frequency and timing of recent energy crashes or flare-ups',
-          'Current medication tolerability and symptom relief assessment',
-          'Clarifying pacing thresholds and activity modifications',
-          'Review of recent lab trends or specialist referrals'
-        ],
-        questionsForDoctor: [
-          'What are the most effective management strategies for my daily symptom patterns?',
-          'Are there any potential interactions or timing improvements for my current medications?',
-          'What red flag symptoms should prompt me to contact your office between scheduled visits?'
-        ],
-        symptomSummary: 'Symptoms have shown noticeable correlation with overexertion days, highlighting the importance of pacing strategies.'
+        conciseBrief: `Upcoming visit with ${appointment?.provider || 'Healthcare Provider'} (${appointment?.purpose || 'Health Review'}).`,
+        talkingPoints: ['Frequency and timing of recent energy crashes', 'Current medication tolerability'],
+        questionsForDoctor: ['What are the most effective management strategies for my daily symptom patterns?'],
+        symptomSummary: 'Symptoms show variable energy correlation with exertion.',
       });
     }
 
-    const prompt = `Create a concise, respectful, patient-centered preparation brief for an upcoming healthcare appointment.
+    const prompt = `Create a concise, respectful, patient-centered preparation brief for an upcoming healthcare appointment in JSON format.
 Patient appointment details:
 - Provider / Clinic: ${appointment?.provider || 'Healthcare Clinician'}
 - Purpose: ${appointment?.purpose || 'General Follow-up'}
@@ -282,21 +307,14 @@ Patient appointment details:
 - Active Medications: ${JSON.stringify(medications || [])}
 - Patient Notes: ${notes || 'None provided'}
 
-Provide a JSON output containing:
-1. conciseBrief: A 2-sentence neutral clinical summary of the primary focus
-2. talkingPoints: 4 bullet points prioritizing what the patient wants to cover
-3. questionsForDoctor: 3 clear, respectful, direct questions to ask
-4. symptomSummary: 2-3 sentences summarizing symptom patterns without speculating on unconfirmed diagnoses.`;
+Provide a JSON object containing:
+1. conciseBrief: A 2-sentence neutral clinical summary
+2. talkingPoints: 4 bullet points prioritizing what to cover
+3. questionsForDoctor: 3 clear, direct questions to ask
+4. symptomSummary: 2-3 sentences summarizing symptom patterns.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const parsed = JSON.parse(response.text || '{}');
+    const responseText = await callOpenRouter([{ role: 'user', content: prompt }], 'You are a clinical preparation assistant that returns valid JSON.', true);
+    const parsed = JSON.parse(responseText || '{}');
     res.json(parsed);
   } catch (error: any) {
     console.error('Error in /api/doctor-prep:', error);
@@ -309,61 +327,31 @@ app.post('/api/recipe-generator', async (req, res) => {
   try {
     const { energyLevel, dietaryPreferences, availableIngredients, prepTimeMax } = req.body;
 
-    if (!ai) {
-      const isLowEnergy = energyLevel <= 4;
+    if (!OPENROUTER_API_KEY) {
       return res.json({
-        recipeName: isLowEnergy ? '10-Minute Soothing Ginger Miso Broth & Rice' : 'Warm Roasted Veggie & Quinoa Nourish Bowl',
-        prepTimeMinutes: isLowEnergy ? 10 : 25,
-        energySpoonCost: isLowEnergy ? 1 : 2,
-        difficulty: isLowEnergy ? 'Low Effort' : 'Moderate',
-        ingredients: isLowEnergy ? [
-          '1 tbsp mild white miso paste',
-          '1 cup pre-cooked jasmine or brown rice',
-          '1 cup warm bone broth or vegetable broth',
-          '1/2 tsp freshly grated ginger or ginger powder',
-          'Small handful baby spinach (wilts instantly in hot broth)',
-          'A drizzle of sesame oil'
-        ] : [
-          '1/2 cup cooked quinoa',
-          '1 cup roasted sweet potato cubes & zucchini',
-          '1/2 cup canned chickpeas, rinsed',
-          '2 tbsp tahini lemon dressing',
-          'Handful fresh greens and pumpkin seeds'
-        ],
-        instructions: isLowEnergy ? [
-          'Warm your broth in a mug or small saucepan until steaming.',
-          'Whisk in miso paste and ginger until smooth.',
-          'Add your pre-cooked rice and fresh spinach leaves directly into the warm broth.',
-          'Drizzle with a touch of sesame oil and enjoy warm, requiring minimal dishes.'
-        ] : [
-          'Arrange warm grains in your favorite bowl.',
-          'Toss roasted vegetables and chickpeas alongside.',
-          'Drizzle generous spoonfuls of tahini lemon dressing over top and sprinkle with seeds.'
-        ],
-        lowEffortAlternative: 'Use a thermos of warm store-bought broth with instant rice crackers or warm toast.',
-        nutritionNotes: 'Easily digestible carbohydrates paired with soothing electrolytes and warming aromatics.'
+        recipeName: '10-Minute Soothing Ginger Miso Broth & Rice',
+        prepTimeMinutes: 10,
+        energySpoonCost: 1,
+        difficulty: 'Low Effort',
+        ingredients: ['1 tbsp white miso paste', '1 cup warm broth', '1 cup cooked rice', 'Fresh ginger', 'Baby spinach'],
+        instructions: ['Warm broth, whisk in miso and ginger, add rice and spinach.'],
+        lowEffortAlternative: 'Store-bought sipping broth with crackers.',
+        nutritionNotes: 'Easily digestible carbohydrates and soothing electrolytes.',
       });
     }
 
-    const prompt = `Generate a nourishing, personalized recipe designed for a person managing chronic health conditions.
+    const prompt = `Generate a nourishing, personalized recipe designed for a person managing chronic health conditions in JSON format.
 Constraints:
-- User Current Spoon/Energy Level: ${energyLevel}/10 (${energyLevel <= 4 ? 'Low energy day - prioritize minimal chopping, short cook time, few dishes' : 'Moderate energy day'})
+- User Current Spoon/Energy Level: ${energyLevel}/10
 - Dietary Preferences: ${(dietaryPreferences || []).join(', ') || 'Wholesome balanced'}
 - Available Ingredients: ${availableIngredients || 'Pantry staples'}
 - Max Prep Time: ${prepTimeMax || 15} minutes
 
 Format as JSON with:
-recipeName, prepTimeMinutes, energySpoonCost (1 to 3), difficulty ("Low Effort" | "Moderate"), ingredients (array), instructions (array), lowEffortAlternative (string), nutritionNotes (string). Avoid claiming it cures or treats diseases.`;
+recipeName, prepTimeMinutes, energySpoonCost (1 to 3), difficulty ("Low Effort" | "Moderate"), ingredients (array), instructions (array), lowEffortAlternative (string), nutritionNotes (string).`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const parsed = JSON.parse(response.text || '{}');
+    const responseText = await callOpenRouter([{ role: 'user', content: prompt }], 'You are a nutritional assistant that returns valid JSON.', true);
+    const parsed = JSON.parse(responseText || '{}');
     res.json(parsed);
   } catch (error: any) {
     console.error('Error in /api/recipe-generator:', error);
@@ -376,15 +364,12 @@ app.post('/api/document-qa', async (req, res) => {
   try {
     const { question, document, userProfile } = req.body;
 
-    if (!ai) {
+    if (!OPENROUTER_API_KEY) {
       return res.json({
-        answer: `Based on your ${document?.documentType || 'medical document'} (${document?.title || 'Report'}), here is a plain-language summary of what is noted:\n\n• Key Finding: ${(document?.keyFindings || []).join('; ') || 'Standard values recorded'}\n\n• Plain Language Explanation: ${document?.plainLanguageSummary || 'Your report shows general parameters for discussion with your care provider.'}\n\nRegarding your question "${question}": Note that while this document provides specific measurements, a licensed clinician must interpret how they fit your symptoms.`,
+        answer: `Regarding "${question}": Please configure OPENROUTER_API_KEY for advanced document Q&A analysis.`,
         extractedFacts: document?.keyFindings || [],
-        aiInterpretation: "This interpretation is for patient education and preparation. Always consult your provider before making changes.",
-        doctorQuestions: document?.suggestedDoctorQuestions || [
-          "How do these findings impact my daily energy management?",
-          "Should we recheck these values in 3 to 6 months?"
-        ]
+        aiInterpretation: 'API key unconfigured.',
+        doctorQuestions: document?.suggestedDoctorQuestions || ['How do these findings impact my current care plan?']
       });
     }
 
@@ -392,43 +377,22 @@ app.post('/api/document-qa', async (req, res) => {
 
 Document Details:
 - Title: ${document?.title || 'Medical Report'}
-- Type: ${document?.documentType || 'Lab / Clinical Report'}
-- Provider: ${document?.provider || 'Healthcare Provider'}
-- Date: ${document?.date || 'Recent'}
+- Type: ${document?.documentType || 'Lab Report'}
 - Key Findings Extracted: ${JSON.stringify(document?.keyFindings || [])}
 - Plain Language Summary: ${document?.plainLanguageSummary || ''}
-- Additional Document Notes: ${document?.userNotes || ''}
-
-Patient Context (Authorized):
-- Name: ${userProfile?.name || 'Friend'}
-- Known Conditions: ${(userProfile?.conditions || []).join(', ') || 'None specified'}
 
 Patient Question: "${question}"
-
-Instructions:
-1. Explain medical terminology in simple, calm, accessible terms.
-2. Clearly distinguish information directly stated in the document from AI-generated general educational interpretations.
-3. If the answer cannot be determined from the document, clearly say so without guessing or fabricating values.
-4. Do NOT diagnose, declare new conditions, or suggest altering prescription dosages.
-5. Provide 2-3 empowering questions the patient can ask their physician.
 
 Format as JSON:
 {
   "answer": "Clear, gentle, supportive answer in 2-3 paragraphs",
-  "extractedFacts": ["Fact 1 directly from report", "Fact 2 directly from report"],
-  "aiInterpretation": "General educational explanation distinguishing facts from general knowledge",
+  "extractedFacts": ["Fact 1", "Fact 2"],
+  "aiInterpretation": "General educational explanation",
   "doctorQuestions": ["Question 1", "Question 2"]
 }`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const parsed = JSON.parse(response.text || '{}');
+    const responseText = await callOpenRouter([{ role: 'user', content: prompt }], 'You are a medical document Q&A assistant that returns valid JSON.', true);
+    const parsed = JSON.parse(responseText || '{}');
     res.json(parsed);
   } catch (error: any) {
     console.error('Error in /api/document-qa:', error);
@@ -436,127 +400,48 @@ Format as JSON:
   }
 });
 
-// Daily Meal Plan Generator (Breakfast, Lunch, Dinner, Snack)
+// Daily Meal Plan Generator
 app.post('/api/daily-meal-plan', async (req, res) => {
   try {
     const { energyLevel, dietaryPreferences, allergies, conditions } = req.body;
 
-    if (!ai) {
-      const isLow = (energyLevel ?? 6) <= 4;
+    if (!OPENROUTER_API_KEY) {
       return res.json({
         id: `plan_${Date.now()}`,
         date: new Date().toISOString().split('T')[0],
-        breakfast: {
-          id: `bf_${Date.now()}`,
-          name: 'Warm Turmeric Golden Oat Porridge with Blueberries',
-          mealType: 'breakfast',
-          spoonCost: 1,
-          prepTimeMinutes: 8,
-          difficulty: 'Low Effort',
-          dietaryTags: ['Anti-inflammatory', 'Gluten-Free', 'Soothing'],
-          ingredients: ['Gluten-free oats', 'Warm oat or almond milk', 'Pinch turmeric & cinnamon', 'Wild blueberries', 'Drizzle maple syrup'],
-          instructions: ['Simmer oats in warm milk with spices for 5 mins', 'Stir in maple syrup', 'Top with fresh or thawed berries'],
-          lowEffortAlternative: 'Instant microwave oat packet with warm plant milk and dash of cinnamon.',
-          nutritionNotes: 'Polyphenol-rich and calming to digestion.',
-          storageGuidance: 'Enjoy warm and fresh.'
-        },
-        lunch: {
-          id: `lu_${Date.now()}`,
-          name: '10-Minute Ginger Miso Broth with Steamed Greens & Rice',
-          mealType: 'lunch',
-          spoonCost: 1,
-          prepTimeMinutes: 10,
-          difficulty: 'Low Effort',
-          dietaryTags: ['Gut-Friendly', 'Hydrating', 'Low Spoon'],
-          ingredients: ['1 tbsp sweet white miso paste', 'Pre-cooked brown or jasmine rice', 'Warm vegetable broth', 'Handful baby spinach', 'Sesame oil'],
-          instructions: ['Whisk miso into warm broth', 'Add pre-cooked rice and spinach', 'Rest 1 minute until wilted'],
-          lowEffortAlternative: 'Store-bought sipping broth with gluten-free crackers.',
-          nutritionNotes: 'Easily digestible carbohydrates with gut-supportive probiotics.',
-          storageGuidance: 'Best consumed immediately.'
-        },
-        dinner: {
-          id: `di_${Date.now()}`,
-          name: isLow ? 'One-Pot Coconut Vegetable Lentil Stew' : 'Nourish Bowl with Roasted Sweet Potatoes & Tahini',
-          mealType: 'dinner',
-          spoonCost: isLow ? 1 : 2,
-          prepTimeMinutes: isLow ? 12 : 25,
-          difficulty: isLow ? 'Low Effort' : 'Moderate',
-          dietaryTags: ['Anti-inflammatory', 'Fiber-Rich', 'Dairy-Free'],
-          ingredients: ['Canned red lentils or chickpeas', 'Coconut milk', 'Mild curry or cumin', 'Cubed zucchini or sweet potato', 'Steamed rice'],
-          instructions: ['Warm lentils and vegetables in coconut milk', 'Simmer until tender', 'Serve over warm rice'],
-          lowEffortAlternative: 'Canned organic lentil soup with warm avocado toast.',
-          nutritionNotes: 'Steady potassium and healthy fats for sustained autonomic stability.',
-          storageGuidance: 'Refrigerate in sealed container up to 3 days.'
-        },
-        snack: {
-          id: `sn_${Date.now()}`,
-          name: 'Electrolyte Chia & Coconut Seed Cup',
-          mealType: 'snack',
-          spoonCost: 1,
-          prepTimeMinutes: 3,
-          difficulty: 'Low Effort',
-          dietaryTags: ['Hydration', 'Mineral-Rich'],
-          ingredients: ['Chia seeds', 'Coconut water or almond yogurt', 'Pumpkin seeds', 'Pinch sea salt'],
-          instructions: ['Stir chia into coconut water or yogurt', 'Let sit 5 minutes', 'Top with seeds'],
-          lowEffortAlternative: 'Handful of salted pumpkin seeds and electrolyte water.',
-          nutritionNotes: 'Sustained bioavailable minerals to support hydration.',
-          storageGuidance: 'Keep chilled.'
-        },
-        dietaryNotes: 'Tailored to support steady glucose, minimal digestion effort, and balanced energy pacing without inflammatory triggers.'
+        breakfast: { id: 'bf_1', name: 'Golden Turmeric Oatmeal', mealType: 'breakfast', spoonCost: 1, prepTimeMinutes: 8, difficulty: 'Low Effort', dietaryTags: ['Anti-inflammatory'], ingredients: ['Oats', 'Milk', 'Turmeric'], instructions: ['Simmer oats in milk with turmeric.'], lowEffortAlternative: 'Instant oatmeal packet.', nutritionNotes: 'Calming to digestion.', storageGuidance: 'Serve warm.' },
+        lunch: { id: 'lu_1', name: 'Ginger Miso Soup', mealType: 'lunch', spoonCost: 1, prepTimeMinutes: 10, difficulty: 'Low Effort', dietaryTags: ['Gut-Friendly'], ingredients: ['Miso', 'Broth', 'Rice'], instructions: ['Dissolve miso in warm broth.'], lowEffortAlternative: 'Sipping broth.', nutritionNotes: 'Electrolytes.', storageGuidance: 'Fresh.' },
+        dinner: { id: 'di_1', name: 'Sweet Potato Lentil Stew', mealType: 'dinner', spoonCost: 1, prepTimeMinutes: 15, difficulty: 'Low Effort', dietaryTags: ['Fiber-Rich'], ingredients: ['Lentils', 'Coconut milk', 'Sweet potato'], instructions: ['Warm ingredients.'], lowEffortAlternative: 'Canned soup.', nutritionNotes: 'Steady carbs.', storageGuidance: 'Keep refrigerated.' },
+        snack: { id: 'sn_1', name: 'Chia Coconut Water', mealType: 'snack', spoonCost: 1, prepTimeMinutes: 3, difficulty: 'Low Effort', dietaryTags: ['Hydration'], ingredients: ['Chia', 'Coconut water'], instructions: ['Stir chia in water.'], lowEffortAlternative: 'Salted seeds.', nutritionNotes: 'Hydration.', storageGuidance: 'Chilled.' },
+        dietaryNotes: 'Tailored for energy preservation.'
       });
     }
 
-    const prompt = `Generate a complete, supportive, 1-day personalized meal plan (Breakfast, Lunch, Dinner, and an optional Snack) for a person managing chronic health conditions.
+    const prompt = `Generate a complete, supportive, 1-day personalized meal plan (Breakfast, Lunch, Dinner, Snack) in JSON format for a person managing chronic health conditions.
+- Conditions: ${(conditions || []).join(', ')}
+- Preferences: ${(dietaryPreferences || []).join(', ')}
+- Allergies to avoid: ${(allergies || []).join(', ')}
+- Energy Level: ${energyLevel ?? 6} / 10
 
-Patient Health Profile:
-- Known Health Conditions: ${(conditions || []).join(', ') || 'Chronic fatigue / energy pacing'}
-- Dietary Preferences: ${(dietaryPreferences || []).join(', ') || 'Wholesome balanced'}
-- Known Allergies to STRICTLY AVOID: ${(allergies || []).join(', ') || 'None reported'}
-- Current Energy / Spoon Level: ${energyLevel ?? 6} / 10 (${(energyLevel ?? 6) <= 4 ? 'Low energy day: prioritize zero-effort prep, minimal standing, 1-pot or no-cook meals' : 'Moderate energy day: balanced prep under 25 minutes'})
-
-Strict Requirements:
-1. NEVER include ingredients from the user's known allergies: ${(allergies || []).join(', ') || 'None'}.
-2. Keep instructions simple, clear, and realistic for someone experiencing fatigue.
-3. Return pure JSON with the schema:
+Return pure JSON with schema:
 {
-  "id": "plan_string",
+  "id": "plan_1",
   "date": "YYYY-MM-DD",
-  "breakfast": {
-    "id": "bf_1", "name": "Name", "mealType": "breakfast", "spoonCost": 1, "prepTimeMinutes": 8, "difficulty": "Low Effort",
-    "dietaryTags": ["Tag"], "ingredients": ["Item 1"], "instructions": ["Step 1"], "lowEffortAlternative": "Alternative", "nutritionNotes": "Notes", "storageGuidance": "Guidance"
-  },
-  "lunch": {
-    "id": "lu_1", "name": "Name", "mealType": "lunch", "spoonCost": 1, "prepTimeMinutes": 10, "difficulty": "Low Effort",
-    "dietaryTags": ["Tag"], "ingredients": ["Item 1"], "instructions": ["Step 1"], "lowEffortAlternative": "Alternative", "nutritionNotes": "Notes", "storageGuidance": "Guidance"
-  },
-  "dinner": {
-    "id": "di_1", "name": "Name", "mealType": "dinner", "spoonCost": 2, "prepTimeMinutes": 20, "difficulty": "Moderate",
-    "dietaryTags": ["Tag"], "ingredients": ["Item 1"], "instructions": ["Step 1"], "lowEffortAlternative": "Alternative", "nutritionNotes": "Notes", "storageGuidance": "Guidance"
-  },
-  "snack": {
-    "id": "sn_1", "name": "Name", "mealType": "snack", "spoonCost": 1, "prepTimeMinutes": 3, "difficulty": "Low Effort",
-    "dietaryTags": ["Tag"], "ingredients": ["Item 1"], "instructions": ["Step 1"], "lowEffortAlternative": "Alternative", "nutritionNotes": "Notes", "storageGuidance": "Guidance"
-  },
-  "dietaryNotes": "Summary explanation of how this plan supports their pacing"
+  "breakfast": { "id": "bf_1", "name": "...", "mealType": "breakfast", "spoonCost": 1, "prepTimeMinutes": 8, "difficulty": "Low Effort", "dietaryTags": [], "ingredients": [], "instructions": [], "lowEffortAlternative": "...", "nutritionNotes": "...", "storageGuidance": "..." },
+  "lunch": { "id": "lu_1", "name": "...", "mealType": "lunch", "spoonCost": 1, "prepTimeMinutes": 10, "difficulty": "Low Effort", "dietaryTags": [], "ingredients": [], "instructions": [], "lowEffortAlternative": "...", "nutritionNotes": "...", "storageGuidance": "..." },
+  "dinner": { "id": "di_1", "name": "...", "mealType": "dinner", "spoonCost": 2, "prepTimeMinutes": 20, "difficulty": "Moderate", "dietaryTags": [], "ingredients": [], "instructions": [], "lowEffortAlternative": "...", "nutritionNotes": "...", "storageGuidance": "..." },
+  "snack": { "id": "sn_1", "name": "...", "mealType": "snack", "spoonCost": 1, "prepTimeMinutes": 3, "difficulty": "Low Effort", "dietaryTags": [], "ingredients": [], "instructions": [], "lowEffortAlternative": "...", "nutritionNotes": "...", "storageGuidance": "..." },
+  "dietaryNotes": "..."
 }`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const parsed = JSON.parse(response.text || '{}');
+    const responseText = await callOpenRouter([{ role: 'user', content: prompt }], 'You are a meal planning assistant that returns valid JSON.', true);
+    const parsed = JSON.parse(responseText || '{}');
     res.json(parsed);
   } catch (error: any) {
     console.error('Error in /api/daily-meal-plan:', error);
     res.status(500).json({ error: error.message });
   }
 });
-
-// Setup Vite middleware in dev or static files in production
 
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';
@@ -576,7 +461,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🌿 Healno server listening on http://0.0.0.0:${PORT}`);
+    console.log(`🌿 Healno server listening on http://0.0.0.0:${PORT} (Provider: OpenRouter, Model: ${OPENROUTER_MODEL})`);
   });
 }
 
