@@ -5,11 +5,9 @@ import {
   Clock,
   MapPin,
   Phone,
-  FileCheck,
   Search,
   Plus,
   Sparkles,
-  ExternalLink,
   ChevronRight,
   ClipboardList,
   CheckCircle2,
@@ -18,11 +16,10 @@ import {
   Edit2,
   Trash2,
   AlertCircle,
-  Building,
   User,
   Stethoscope,
 } from 'lucide-react';
-import { defaultCareProviders, storageService } from '../../services/storage';
+import { storageService } from '../../services/storage';
 import { apiService } from '../../services/api';
 
 interface AppointmentsScreenProps {
@@ -44,11 +41,20 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
   onBack,
   userName = 'Friend',
 }) => {
-  const [activeTab, setActiveTab] = useState<'appointments' | 'finder' | 'outreach'>('appointments');
+  const [activeTab, setActiveTab] = useState<'appointments' | 'directory' | 'outreach'>('appointments');
+  const [providers, setProviders] = useState<CareProvider[]>(() => storageService.getProviders());
+  const [providerSearch, setProviderSearch] = useState('');
+  const [showProviderModal, setShowProviderModal] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<CareProvider | null>(null);
+
+  // Provider Form fields
+  const [provName, setProvName] = useState('');
+  const [provType, setProvType] = useState<CareProvider['type']>('Clinic');
+  const [provSpecialty, setProvSpecialty] = useState('');
+  const [provAddress, setProvAddress] = useState('');
+  const [provPhone, setProvPhone] = useState('');
   const [timelineTab, setTimelineTab] = useState<'upcoming' | 'past'>('upcoming');
   const [selectedApt, setSelectedApt] = useState<Appointment | null>(appointments[0] || null);
-  const [searchCareQuery, setSearchCareQuery] = useState('');
-  const [careTypeFilter, setCareTypeFilter] = useState<string>('all');
   const [isGeneratingPrep, setIsGeneratingPrep] = useState(false);
 
   // Modal states for creating / editing / rescheduling
@@ -82,13 +88,6 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
 
   const displayedList = timelineTab === 'upcoming' ? upcomingAppointments : pastAppointments;
 
-  const filteredProviders = defaultCareProviders.filter((p) => {
-    const matchesSearch =
-      p.name.toLowerCase().includes(searchCareQuery.toLowerCase()) ||
-      p.specialty.toLowerCase().includes(searchCareQuery.toLowerCase());
-    const matchesType = careTypeFilter === 'all' || p.type === careTypeFilter;
-    return matchesSearch && matchesType;
-  });
 
   const openNewAptModal = () => {
     setEditingApt(null);
@@ -202,6 +201,63 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
     }
   };
 
+  const openNewProviderModal = () => {
+    setEditingProvider(null);
+    setProvName('');
+    setProvType('Clinic');
+    setProvSpecialty('');
+    setProvAddress('');
+    setProvPhone('');
+    setShowProviderModal(true);
+  };
+
+  const openEditProviderModal = (prov: CareProvider) => {
+    setEditingProvider(prov);
+    setProvName(prov.name);
+    setProvType(prov.type);
+    setProvSpecialty(prov.specialty);
+    setProvAddress(prov.address);
+    setProvPhone(prov.phone);
+    setShowProviderModal(true);
+  };
+
+  const handleSaveProvider = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!provName.trim()) return;
+
+    const provider: CareProvider = {
+      id: editingProvider?.id || `prov_${Date.now()}`,
+      name: provName.trim(),
+      type: provType,
+      specialty: provSpecialty.trim(),
+      address: provAddress.trim(),
+      phone: provPhone.trim(),
+      distanceMiles: editingProvider?.distanceMiles || 0,
+      rating: editingProvider?.rating || 5,
+      verified: editingProvider?.verified || false,
+    };
+
+    storageService.saveProvider(provider);
+    setProviders(storageService.getProviders());
+    setShowProviderModal(false);
+  };
+
+  const handleDeleteProvider = (id: string) => {
+    if (window.confirm('Delete this care provider from your directory?')) {
+      storageService.deleteProvider(id);
+      setProviders(storageService.getProviders());
+    }
+  };
+
+  const filteredProviders = providers.filter((p) => {
+    const search = providerSearch.toLowerCase();
+    return (
+      p.name.toLowerCase().includes(search) ||
+      p.specialty.toLowerCase().includes(search) ||
+      p.type.toLowerCase().includes(search)
+    );
+  });
+
   const handleGenerateDoctorPrep = async (apt: Appointment) => {
     setIsGeneratingPrep(true);
     try {
@@ -279,12 +335,12 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
           Visits ({appointments.length})
         </button>
         <button
-          onClick={() => setActiveTab('finder')}
+          onClick={() => setActiveTab('directory')}
           className={`flex-1 py-1.5 text-xs font-semibold rounded-xl transition-all ${
-            activeTab === 'finder' ? 'bg-[#FF7A24] text-white shadow-xs' : 'text-[#132A1F]/70 hover:text-[#132A1F]'
+            activeTab === 'directory' ? 'bg-[#FF7A24] text-white shadow-xs' : 'text-[#132A1F]/70 hover:text-[#132A1F]'
           }`}
         >
-          Local Directory
+          My Directory ({providers.length})
         </button>
         <button
           onClick={() => setActiveTab('outreach')}
@@ -538,92 +594,119 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
         </div>
       )}
 
-      {/* ================= LOCAL CARE FINDER TAB ================= */}
-      {activeTab === 'finder' && (
-        <div className="space-y-3">
-          <div className="bg-white rounded-2xl p-3 border border-[#132A1F]/10 space-y-2">
+      {/* ================= MY DIRECTORY TAB ================= */}
+      {activeTab === 'directory' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-3xl p-5 border border-[#132A1F]/10 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-[#132A1F] font-display flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-[#FF7A24]" />
+                  <span>My Healthcare Directory</span>
+                </h3>
+                <p className="text-[11px] text-[#132A1F]/60">Manage your manually added hospitals, labs, and specialists</p>
+              </div>
+              <button
+                onClick={openNewProviderModal}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#132A1F] text-white text-[10px] font-bold shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Provider</span>
+              </button>
+            </div>
+
             <div className="relative">
               <Search className="w-4 h-4 text-[#132A1F]/40 absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="Search nearby clinics, labs, dysautonomia specialists..."
-                value={searchCareQuery}
-                onChange={(e) => setSearchCareQuery(e.target.value)}
-                className="w-full bg-[#F8F6F0] rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none"
+                placeholder="Search directory by name, specialty, or type..."
+                value={providerSearch}
+                onChange={(e) => setProviderSearch(e.target.value)}
+                className="w-full bg-[#F8F6F0] rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#FF7A24]/40"
               />
-            </div>
-
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs">
-              {['all', 'Specialist', 'Clinic', 'Lab', 'Hospital'].map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setCareTypeFilter(type)}
-                  className={`px-3 py-1 rounded-full whitespace-nowrap font-medium transition-colors ${
-                    careTypeFilter === type
-                      ? 'bg-[#132A1F] text-white'
-                      : 'bg-[#F8F6F0] text-[#132A1F]/70'
-                  }`}
-                >
-                  {type === 'all' ? 'All Providers' : type}
-                </button>
-              ))}
             </div>
           </div>
 
-          {/* Results list */}
+          {/* Directory list */}
           <div className="space-y-2.5">
-            {filteredProviders.map((prov) => (
-              <div
-                key={prov.id}
-                className="bg-white rounded-2xl p-4 border border-[#132A1F]/10 shadow-xs space-y-2"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-xs font-bold text-[#132A1F]">{prov.name}</h4>
-                      {prov.verified && (
-                        <span className="text-[9px] bg-[#D8F3DC] text-[#1B4332] px-1.5 py-0.2 rounded-md font-bold">
-                          Verified
+            {filteredProviders.length === 0 ? (
+              <div className="bg-white rounded-2xl p-6 text-center border border-[#132A1F]/10 space-y-2">
+                <MapPin className="w-8 h-8 text-[#FF7A24] mx-auto opacity-70" />
+                <h5 className="text-xs font-bold text-[#132A1F]">Your directory is empty</h5>
+                <p className="text-[11px] text-[#132A1F]/60">
+                  Add hospitals, labs, and clinics to quickly reuse them when scheduling visits.
+                </p>
+                <button
+                  onClick={openNewProviderModal}
+                  className="inline-flex items-center gap-1 px-4 py-1.5 rounded-full bg-[#FF7A24] text-white text-xs font-bold mt-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create First Entry</span>
+                </button>
+              </div>
+            ) : (
+              filteredProviders.map((prov) => (
+                <div
+                  key={prov.id}
+                  className="bg-white rounded-2xl p-4 border border-[#132A1F]/10 shadow-xs space-y-2.5 hover:border-[#FF7A24]/30 transition-all"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] bg-[#E8EFE9] text-[#132A1F] px-1.5 py-0.2 rounded font-bold uppercase">
+                          {prov.type}
                         </span>
-                      )}
+                        <h4 className="text-xs font-bold text-[#132A1F]">{prov.name}</h4>
+                      </div>
+                      <p className="text-[11px] text-[#132A1F]/60 mt-0.5">{prov.specialty || 'General Care'}</p>
                     </div>
-                    <p className="text-[11px] text-[#132A1F]/60 mt-0.5">{prov.specialty}</p>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => openEditProviderModal(prov)}
+                        className="p-1.5 rounded-full hover:bg-[#F8F6F0] text-[#132A1F]/40 hover:text-[#FF7A24] transition-colors"
+                        title="Edit Provider"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProvider(prov.id)}
+                        className="p-1.5 rounded-full hover:bg-rose-50 text-[#132A1F]/40 hover:text-rose-600 transition-colors"
+                        title="Delete Provider"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
-                  <span className="text-[10px] bg-[#E8EFE9] text-[#132A1F] px-2 py-0.5 rounded-full font-semibold">
-                    {prov.distanceMiles} mi away
-                  </span>
-                </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-[#132A1F]/70 pt-2 border-t border-[#132A1F]/5">
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="w-3 h-3 text-[#132A1F]/30 shrink-0" />
+                      <span className="truncate">{prov.address || 'No address provided'}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Phone className="w-3 h-3 text-[#132A1F]/30 shrink-0" />
+                      <span>{prov.phone || 'No phone listed'}</span>
+                    </div>
+                  </div>
 
-                <div className="text-xs text-[#132A1F]/70 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-[#132A1F]/40 shrink-0" />
-                  <span>{prov.address}</span>
+                  <div className="pt-1 flex justify-end">
+                    <button
+                      onClick={() => {
+                        setDoctorName(prov.name);
+                        setSpecialty(prov.specialty);
+                        setClinicName(prov.address);
+                        setActiveTab('appointments');
+                        setShowModal(true);
+                      }}
+                      className="text-[10px] font-bold text-[#FF7A24] hover:underline flex items-center gap-1"
+                    >
+                      Schedule Visit Here <ChevronRight className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
-
-                <div className="text-xs text-[#132A1F]/70 flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5 text-[#132A1F]/40 shrink-0" />
-                  <span>{prov.phone}</span>
-                </div>
-
-                <div className="pt-2 flex items-center justify-between border-t border-[#132A1F]/5">
-                  <span className="text-[11px] text-[#2D6A4F] font-semibold">
-                    ★ {prov.rating} patient review rating
-                  </span>
-
-                  <button
-                    onClick={() => {
-                      setDoctorName(prov.name);
-                      setSpecialty(prov.specialty);
-                      setClinicName(prov.address);
-                      setShowModal(true);
-                    }}
-                    className="text-xs bg-[#FF7A24] text-white px-3 py-1 rounded-full font-bold hover:bg-[#E06516] transition-colors"
-                  >
-                    Add to Visits
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       )}
@@ -711,6 +794,29 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
             </div>
 
             <form onSubmit={handleSaveModal} className="space-y-4">
+              {providers.length > 0 && !editingApt && (
+                <div className="bg-[#E8EFE9]/50 p-3 rounded-2xl border border-[#132A1F]/5 space-y-1.5">
+                  <label className="block text-[10px] font-bold text-[#2D6A4F] uppercase">Quick Select from Directory</label>
+                  <select
+                    onChange={(e) => {
+                      const selected = providers.find(p => p.id === e.target.value);
+                      if (selected) {
+                        setDoctorName(selected.name);
+                        setSpecialty(selected.specialty);
+                        setClinicName(selected.address);
+                      }
+                    }}
+                    className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-3 py-1.5 text-xs outline-none"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Choose a saved provider...</option>
+                    {providers.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.type})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-[#132A1F] mb-1">
                   Doctor / Provider Name *
@@ -821,6 +927,107 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
                     : editingApt
                     ? 'Update Appointment'
                     : 'Schedule Visit'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ================= MODAL: ADD / EDIT PROVIDER ================= */}
+      {showProviderModal && (
+        <div className="fixed inset-0 z-50 bg-[#132A1F]/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#FAF8F5] w-full max-w-md max-h-[90vh] rounded-3xl p-6 shadow-2xl border border-[#132A1F]/10 overflow-y-auto space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-2 border-b border-[#132A1F]/10">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#FFF4EB] flex items-center justify-center text-[#FF7A24]">
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <h3 className="text-base font-bold text-[#132A1F] font-display">
+                  {editingProvider ? 'Edit Provider Details' : 'Add New Care Provider'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowProviderModal(false)}
+                className="w-7 h-7 rounded-full bg-[#E8EFE9] flex items-center justify-center text-[#132A1F]/70 hover:bg-[#d8e3da]"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProvider} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[#132A1F] mb-1">Provider or Facility Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. St. Jude Hospital, Central Lab"
+                  value={provName}
+                  onChange={(e) => setProvName(e.target.value)}
+                  className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-bold text-[#132A1F] mb-1">Type</label>
+                  <select
+                    value={provType}
+                    onChange={(e) => setProvType(e.target.value as any)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  >
+                    <option value="Clinic">Clinic</option>
+                    <option value="Hospital">Hospital</option>
+                    <option value="Lab">Lab</option>
+                    <option value="Specialist">Specialist</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#132A1F] mb-1">Specialty / Dept</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Cardiology, Blood Tests"
+                    value={provSpecialty}
+                    onChange={(e) => setProvSpecialty(e.target.value)}
+                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#132A1F] mb-1">Physical Address</label>
+                <input
+                  type="text"
+                  placeholder="Street, City, State"
+                  value={provAddress}
+                  onChange={(e) => setProvAddress(e.target.value)}
+                  className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#132A1F] mb-1">Contact Phone</label>
+                <input
+                  type="tel"
+                  placeholder="e.g. (555) 123-4567"
+                  value={provPhone}
+                  onChange={(e) => setProvPhone(e.target.value)}
+                  className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowProviderModal(false)}
+                  className="px-4 py-2 rounded-full text-xs font-semibold text-[#132A1F]/70 hover:bg-[#E8EFE9]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-full bg-[#132A1F] text-white text-xs font-bold shadow-md transition-all active:scale-95"
+                >
+                  {editingProvider ? 'Update Provider' : 'Add to Directory'}
                 </button>
               </div>
             </form>

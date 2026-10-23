@@ -34,6 +34,8 @@ export interface UserProfile {
   isOnboarded: boolean;
   isAuthenticated: boolean;
   avatarUrl?: string;
+  symptomBehavior?: string;
+  sharingPreference?: string;
 }
 
 export interface SymptomLog {
@@ -201,7 +203,7 @@ export interface CareProvider {
   rating: number;
   bookingUrl?: string;
   verified: boolean;
-  openNow: boolean;
+  openNow?: boolean;
 }
 
 export interface Lesson {

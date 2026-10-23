@@ -100,6 +100,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     today.toISOString().split('T')[0]
   );
 
+  // Health Profile Edit States
+  const [isEditingHealth, setIsEditingHealth] = useState(false);
+  const [editedConditions, setEditedConditions] = useState<string[]>(profile.conditions || []);
+  const [editedDietary, setEditedDietary] = useState<string[]>(profile.dietaryPreferences || []);
+  const [editedAllergies, setEditedAllergies] = useState<string[]>(profile.allergies || []);
+  const [editedSymptomBehavior, setEditedSymptomBehavior] = useState(profile.symptomBehavior || '');
+  const [editedSharingPref, setEditedSharingPref] = useState(profile.sharingPreference || '');
+  const [healthSavedNotice, setHealthSavedNotice] = useState(false);
+
+  // Custom inputs for adding new items
+  const [newCondition, setNewCondition] = useState('');
+  const [newDietary, setNewDietary] = useState('');
+  const [newAllergy, setNewAllergy] = useState('');
+
   // Sync tab if initialTab changes
   React.useEffect(() => {
     if (initialTab) {
@@ -136,6 +150,30 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     storageService.setProfile(updated);
     setLocationSavedNotice(true);
     setTimeout(() => setLocationSavedNotice(false), 2500);
+  };
+
+  const handleSaveHealthProfile = () => {
+    const updated: UserProfile = {
+      ...profile,
+      conditions: editedConditions,
+      dietaryPreferences: editedDietary,
+      allergies: editedAllergies,
+      symptomBehavior: editedSymptomBehavior,
+      sharingPreference: editedSharingPref,
+    };
+    onUpdateProfile(updated);
+    storageService.setProfile(updated);
+    setIsEditingHealth(false);
+    setHealthSavedNotice(true);
+    setTimeout(() => setHealthSavedNotice(false), 2500);
+  };
+
+  const toggleListItem = (list: string[], item: string, setter: (val: string[]) => void) => {
+    if (list.includes(item)) {
+      setter(list.filter((x) => x !== item));
+    } else {
+      setter([...list, item]);
+    }
   };
 
   // Handle File Upload
@@ -553,60 +591,346 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </div>
           </div>
 
-          {/* Health Conditions */}
-          <div className="bg-white rounded-3xl p-5 border border-[#132A1F]/10 shadow-xs space-y-2">
-            <h4 className="text-xs font-bold text-[#132A1F] uppercase tracking-wider">
-              Recorded Conditions
-            </h4>
-            <div className="flex flex-wrap gap-1.5">
-              {profile.conditions.length === 0 ? (
-                <span className="text-xs text-[#132A1F]/50 italic">No chronic conditions listed</span>
-              ) : (
-                profile.conditions.map((c, i) => (
-                  <span
-                    key={i}
-                    className="text-xs bg-[#E8EFE9] text-[#132A1F] px-2.5 py-1 rounded-full font-medium"
-                  >
-                    {c}
+          {/* Health Profile Section */}
+          <div className="bg-white rounded-3xl p-5 border border-[#132A1F]/10 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#FFF4EB] border border-[#FFE0C8] flex items-center justify-center text-[#FF7A24]">
+                  <Activity className="w-4 h-4" />
+                </div>
+                <h4 className="text-xs font-bold text-[#132A1F] uppercase tracking-wider">
+                  Health & Dietary Profile
+                </h4>
+              </div>
+              <div className="flex items-center gap-2">
+                {healthSavedNotice && (
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full animate-in fade-in">
+                    Saved
                   </span>
-                ))
+                )}
+                <button
+                  onClick={() => isEditingHealth ? handleSaveHealthProfile() : setIsEditingHealth(true)}
+                  className={`text-[10px] px-3 py-1 rounded-full font-bold transition-all ${
+                    isEditingHealth 
+                      ? 'bg-[#FF7A24] text-white' 
+                      : 'bg-[#E8EFE9] text-[#132A1F] hover:bg-[#d8e3da]'
+                  }`}
+                >
+                  {isEditingHealth ? 'Save Changes' : 'Edit Health Info'}
+                </button>
+                {isEditingHealth && (
+                  <button
+                    onClick={() => setIsEditingHealth(false)}
+                    className="text-[10px] text-[#132A1F]/60 font-bold hover:underline"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Conditions */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold text-[#132A1F]/50 uppercase">Recorded Conditions</label>
+                {isEditingHealth && editedConditions.length > 0 && (
+                  <button 
+                    onClick={() => setEditedConditions([])}
+                    className="text-[9px] text-red-500 font-bold hover:underline"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+              {isEditingHealth ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {editedConditions.map((c, i) => (
+                      <span key={i} className="text-xs bg-[#FF7A24] text-white px-2.5 py-1 rounded-full font-medium flex items-center gap-1.5 shadow-sm group">
+                        <span>{c}</span>
+                        <button 
+                          onClick={() => toggleListItem(editedConditions, c, setEditedConditions)}
+                          className="hover:scale-125 transition-transform p-0.5"
+                          title="Delete condition"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 mt-1">
+                    <input
+                      type="text"
+                      placeholder="Add condition..."
+                      value={newCondition}
+                      onChange={(e) => setNewCondition(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newCondition.trim()) {
+                          setEditedConditions(prev => [...prev, newCondition.trim()]);
+                          setNewCondition('');
+                        }
+                      }}
+                      className="flex-1 bg-[#FAF8F5] border border-[#132A1F]/15 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-[#FF7A24] outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        if (newCondition.trim()) {
+                          setEditedConditions(prev => [...prev, newCondition.trim()]);
+                          setNewCondition('');
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-[#132A1F] text-white text-[10px] font-bold rounded-xl active:scale-95 transition-transform"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {profile.conditions.length === 0 ? (
+                    <span className="text-xs text-[#132A1F]/50 italic">No chronic conditions listed</span>
+                  ) : (
+                    profile.conditions.map((c, i) => (
+                      <span key={i} className="text-xs bg-[#E8EFE9] text-[#132A1F] px-2.5 py-1 rounded-full font-medium border border-[#132A1F]/5">
+                        {c}
+                      </span>
+                    ))
+                  )}
+                </div>
               )}
             </div>
-          </div>
 
-          {/* Preferences and Allergies */}
-          <div className="bg-white rounded-3xl p-5 border border-[#132A1F]/10 shadow-xs space-y-3">
-            <div>
-              <h4 className="text-xs font-bold text-[#132A1F] uppercase tracking-wider mb-1.5">
-                Dietary Focus
-              </h4>
-              <div className="flex flex-wrap gap-1.5">
-                {profile.dietaryPreferences.map((d, i) => (
-                  <span
-                    key={i}
-                    className="text-xs bg-[#F8F6F0] text-[#132A1F] border border-[#132A1F]/10 px-2.5 py-1 rounded-full"
+            {/* Dietary Focus */}
+            <div className="space-y-2 pt-2 border-t border-[#132A1F]/5">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold text-[#132A1F]/50 uppercase">Dietary Focus</label>
+                {isEditingHealth && editedDietary.length > 0 && (
+                  <button 
+                    onClick={() => setEditedDietary([])}
+                    className="text-[9px] text-red-500 font-bold hover:underline"
                   >
-                    {d}
-                  </span>
-                ))}
+                    Clear All
+                  </button>
+                )}
               </div>
+              {isEditingHealth ? (
+                <div className="space-y-3">
+                  {/* Removable Pills for all current dietary prefs */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {editedDietary.map((d, i) => (
+                      <span key={i} className="text-xs bg-[#FF7A24] text-white px-2.5 py-1 rounded-full font-medium flex items-center gap-1.5 shadow-sm group">
+                        <span>{d}</span>
+                        <button 
+                          onClick={() => toggleListItem(editedDietary, d, setEditedDietary)}
+                          className="hover:scale-125 transition-transform p-0.5"
+                          title="Delete dietary focus"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Popular Selection Grid */}
+                  <div className="bg-[#FAF8F5] p-2.5 rounded-2xl border border-[#132A1F]/5">
+                    <p className="text-[9px] font-bold text-[#132A1F]/40 uppercase mb-2">Popular Options</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        'Anti-Inflammatory', 'Low Histamine', 'Gluten-Free', 'Dairy-Free',
+                        'Plant-Based', 'Low FODMAP', 'Keto / Low Carb', 'Mediterranean'
+                      ].map(diet => (
+                        <button
+                          key={diet}
+                          type="button"
+                          onClick={() => toggleListItem(editedDietary, diet, setEditedDietary)}
+                          className={`text-[10px] px-2 py-1.5 rounded-lg border text-left transition-all ${
+                            editedDietary.includes(diet)
+                              ? 'bg-[#FF7A24] text-white border-[#FF7A24] font-bold'
+                              : 'bg-white border-[#132A1F]/10 text-[#132A1F]/70 hover:border-[#FF7A24]/30'
+                          }`}
+                        >
+                          {diet} {editedDietary.includes(diet) && '✓'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-1">
+                    <input
+                      type="text"
+                      placeholder="Other dietary preference..."
+                      value={newDietary}
+                      onChange={(e) => setNewDietary(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newDietary.trim()) {
+                          setEditedDietary(prev => [...prev, newDietary.trim()]);
+                          setNewDietary('');
+                        }
+                      }}
+                      className="flex-1 bg-[#FAF8F5] border border-[#132A1F]/15 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-[#FF7A24] outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        if (newDietary.trim()) {
+                          setEditedDietary(prev => [...prev, newDietary.trim()]);
+                          setNewDietary('');
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-[#132A1F] text-white text-[10px] font-bold rounded-xl active:scale-95 transition-transform"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {profile.dietaryPreferences.length === 0 ? (
+                    <span className="text-xs text-[#132A1F]/50 italic">None specified</span>
+                  ) : (
+                    profile.dietaryPreferences.map((d, i) => (
+                      <span key={i} className="text-xs bg-[#F8F6F0] border border-[#132A1F]/10 px-2.5 py-1 rounded-full">
+                        {d}
+                      </span>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
 
-            <div className="pt-2 border-t border-[#132A1F]/5">
-              <h4 className="text-xs font-bold text-[#132A1F] uppercase tracking-wider mb-1.5">
-                Known Allergies
-              </h4>
-              <div className="flex flex-wrap gap-1.5">
-                {profile.allergies.map((a, i) => (
-                  <span
-                    key={i}
-                    className="text-xs bg-[#FFE5D9] text-[#6B4435] px-2.5 py-1 rounded-full font-semibold"
+            {/* Allergies */}
+            <div className="space-y-2 pt-2 border-t border-[#132A1F]/5">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold text-[#132A1F]/50 uppercase">Known Allergies</label>
+                {isEditingHealth && editedAllergies.length > 0 && (
+                  <button 
+                    onClick={() => setEditedAllergies([])}
+                    className="text-[9px] text-red-500 font-bold hover:underline"
                   >
-                    {a}
-                  </span>
-                ))}
+                    Clear All
+                  </button>
+                )}
               </div>
+              {isEditingHealth ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {editedAllergies.map((a, i) => (
+                      <span key={i} className="text-xs bg-[#FFE5D9] text-[#6B4435] px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 shadow-sm">
+                        <span>{a}</span>
+                        <button 
+                          onClick={() => toggleListItem(editedAllergies, a, setEditedAllergies)}
+                          className="hover:scale-125 transition-transform p-0.5"
+                          title="Delete allergy"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 mt-1">
+                    <input
+                      type="text"
+                      placeholder="Add allergy..."
+                      value={newAllergy}
+                      onChange={(e) => setNewAllergy(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newAllergy.trim()) {
+                          setEditedAllergies(prev => [...prev, newAllergy.trim()]);
+                          setNewAllergy('');
+                        }
+                      }}
+                      className="flex-1 bg-[#FAF8F5] border border-[#132A1F]/15 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-[#FF7A24] outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        if (newAllergy.trim()) {
+                          setEditedAllergies(prev => [...prev, newAllergy.trim()]);
+                          setNewAllergy('');
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-[#132A1F] text-white text-[10px] font-bold rounded-xl active:scale-95 transition-transform"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {profile.allergies.length === 0 ? (
+                    <span className="text-xs text-[#132A1F]/50 italic">No allergies listed</span>
+                  ) : (
+                    profile.allergies.map((a, i) => (
+                      <span key={i} className="text-xs bg-[#FFE5D9] text-[#6B4435] px-2.5 py-1 rounded-full font-semibold border border-[#132A1F]/5">
+                        {a}
+                      </span>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
+
+            {/* Behavior & Goals */}
+            <div className="space-y-2 pt-2 border-t border-[#132A1F]/5">
+              <label className="text-[10px] font-bold text-[#132A1F]/50 uppercase">Symptom Behavior</label>
+              {isEditingHealth ? (
+                <select
+                  value={editedSymptomBehavior}
+                  onChange={(e) => setEditedSymptomBehavior(e.target.value)}
+                  className="w-full bg-[#FAF8F5] border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-[#FF7A24] outline-none"
+                >
+                  <option value="">Select behavior...</option>
+                  <option value="Fluctuates depending on activity and rest">Fluctuates with activity</option>
+                  <option value="Steady baseline with sudden flare-ups">Steady with flares</option>
+                  <option value="Triggered by stress, weather, or exertion">Triggered by factors</option>
+                  <option value="Gradually improving or still under investigation">Under investigation</option>
+                </select>
+              ) : (
+                <p className="text-xs text-[#132A1F]/80">
+                  {profile.symptomBehavior || 'Not specified'}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2 pt-2 border-t border-[#132A1F]/5">
+              <label className="text-[10px] font-bold text-[#132A1F]/50 uppercase">Healno Use Plan</label>
+              {isEditingHealth ? (
+                <select
+                  value={editedSharingPref}
+                  onChange={(e) => setEditedSharingPref(e.target.value)}
+                  className="w-full bg-[#FAF8F5] border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-[#FF7A24] outline-none"
+                >
+                  <option value="">Select plan...</option>
+                  <option value="Personal reflection & tracking only">Personal tracking</option>
+                  <option value="Prepare clinical summary notes before doctor appointments">Doctor preparation</option>
+                  <option value="Share exported symptom reports with my healthcare provider">Healthcare sharing</option>
+                  <option value="Manage my daily energy, tasks, and pacing">Energy management</option>
+                </select>
+              ) : (
+                <p className="text-xs text-[#132A1F]/80">
+                  {profile.sharingPreference || 'Not specified'}
+                </p>
+              )}
+            </div>
+
+            {/* Reset Profile Option */}
+            {isEditingHealth && (
+              <div className="pt-4 border-t border-[#132A1F]/10 text-center">
+                <button
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to clear your entire health profile? This will remove all conditions, dietary preferences, and allergies.')) {
+                      setEditedConditions([]);
+                      setEditedDietary([]);
+                      setEditedAllergies([]);
+                      setEditedSymptomBehavior('');
+                      setEditedSharingPref('');
+                    }
+                  }}
+                  className="text-[10px] bg-red-50 text-red-600 px-3 py-1.5 rounded-full font-bold hover:bg-red-100 transition-colors flex items-center gap-1.5 mx-auto"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Reset All Onboarding Health Data</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

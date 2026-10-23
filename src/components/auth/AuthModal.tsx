@@ -56,7 +56,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     try {
       if (authMode === 'signup') {
-        const nameToUse = fullName.trim() || email.split('@')[0];
+        const nameToUse = fullName.trim() || 'Friend';
         let userId = `user_${Date.now()}`;
 
         try {
@@ -101,7 +101,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           const user = data?.user;
           const userMetadataName = user?.user_metadata?.name;
-          const fallbackName = user?.email?.split('@')[0] || email.split('@')[0] || 'Friend';
+          const fallbackName = 'Friend';
           
           onLoginSuccess({
             id: user?.id || `user_${Date.now()}`,

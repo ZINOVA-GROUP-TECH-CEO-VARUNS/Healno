@@ -48,7 +48,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 }) => {
   // 7 Structured Onboarding Steps
   const [step, setStep] = useState(1);
-  const totalSteps = 7;
+  const totalSteps = 8;
 
   // Step 1: Personal Profile
   const [name, setName] = useState(initialProfile.name || '');
@@ -80,9 +80,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const [symptomBehavior, setSymptomBehavior] = useState<string>('Fluctuates depending on activity');
   const [supportGoals, setSupportGoals] = useState<string[]>([]);
 
-  // Step 6: Healthcare Preferences
   const [sharingPreference, setSharingPreference] = useState<string>('Personal reflection & tracking only');
   const [trackingMethods, setTrackingMethods] = useState<string[]>([]);
+
+  // Step 7: Dietary Focus
+  const [dietaryPreferences, setDietaryPreferences] = useState<string[]>(initialProfile.dietaryPreferences || []);
+  const [allergies, setAllergies] = useState<string[]>(initialProfile.allergies || []);
+  const [customAllergyInput, setCustomAllergyInput] = useState('');
 
   // Resume partial progress if available
   useEffect(() => {
@@ -99,8 +103,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         if (savedProgress.impactAreas) setImpactAreas(savedProgress.impactAreas);
         if (savedProgress.symptomBehavior) setSymptomBehavior(savedProgress.symptomBehavior);
         if (savedProgress.supportGoals) setSupportGoals(savedProgress.supportGoals);
-        if (savedProgress.sharingPreference) setSharingPreference(savedProgress.sharingPreference);
+         if (savedProgress.sharingPreference) setSharingPreference(savedProgress.sharingPreference);
         if (savedProgress.trackingMethods) setTrackingMethods(savedProgress.trackingMethods);
+        if (savedProgress.dietaryPreferences) setDietaryPreferences(savedProgress.dietaryPreferences);
+        if (savedProgress.allergies) setAllergies(savedProgress.allergies);
       }
     }
   }, [isOpen]);
@@ -120,6 +126,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       supportGoals,
       sharingPreference,
       trackingMethods,
+      dietaryPreferences,
+      allergies,
     });
   };
 
@@ -157,13 +165,17 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     const summaryMedString = medsList.map((m) => `${m.name} ${m.dosage}`.trim()).join(', ');
 
     onComplete({
-      name: name.trim() || 'Varun',
-      email: initialProfile.email || 'thexplorervaruns@gmail.com',
+      name: (name.trim() && name.trim() !== 'Friend') ? name.trim() : 'Healno Friend',
+      email: email || initialProfile.email || 'account@healno.app',
       gender,
       conditions: selectedConditions,
       commonSymptoms: selectedSymptoms,
       currentMedicationsSummary: summaryMedString,
       dailySpoonsCapacity: 12,
+      dietaryPreferences,
+      allergies,
+      symptomBehavior,
+      sharingPreference,
       isOnboarded: true,
       isAuthenticated: true,
     });
@@ -795,24 +807,123 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     'Triggered by stress, weather, or exertion',
                     'Gradually improving or still under investigation',
                   ].map((opt) => (
-                    <label key={opt} className="flex items-center gap-2 text-xs text-[#132A1F] cursor-pointer">
-                      <input
-                        type="radio"
-                        name="symptomBehavior"
-                        checked={symptomBehavior === opt}
-                        onChange={() => setSymptomBehavior(opt)}
-                        className="accent-[#FF7A24]"
-                      />
-                      <span>{opt}</span>
-                    </label>
+                    <div
+                      key={opt}
+                      onClick={() => setSymptomBehavior(prev => prev === opt ? '' : opt)}
+                      className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                        symptomBehavior === opt
+                          ? 'bg-[#FFF4EB] border-[#FF7A24] shadow-xs'
+                          : 'bg-[#FAF8F5] border-[#132A1F]/10 hover:border-[#132A1F]/30'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                        symptomBehavior === opt ? 'border-[#FF7A24] bg-[#FF7A24]' : 'border-[#132A1F]/30 bg-white'
+                      }`}>
+                        {symptomBehavior === opt && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <span className={`text-xs ${symptomBehavior === opt ? 'font-bold text-[#FF7A24]' : 'text-[#132A1F]'}`}>
+                        {opt}
+                      </span>
+                    </div>
                   ))}
                 </div>
               </div>
             </div>
           )}
 
-          {/* STEP 6: Healthcare Preferences */}
+          {/* STEP 6: Dietary Focus */}
           {step === 6 && (
+            <div className="space-y-4 animate-in fade-in">
+              <div className="text-center pb-1">
+                <div className="w-12 h-12 rounded-2xl bg-[#FFF4EB] border border-[#FF7A24]/30 flex items-center justify-center mx-auto mb-2 text-[#FF7A24]">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-[#132A1F] font-display">
+                  Dietary Focus (Optional)
+                </h3>
+                <p className="text-xs text-[#132A1F]/70 mt-0.5 max-w-sm mx-auto">
+                  Nutrition affects energy levels. Let us know your focus areas to better tailor your pacing and rest advice.
+                </p>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-[#132A1F]/10 space-y-2.5">
+                <label className="text-xs font-bold text-[#132A1F] block">
+                  Do you follow a specific dietary focus? (Select all that apply)
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    'Anti-Inflammatory',
+                    'Low Histamine',
+                    'Gluten-Free',
+                    'Dairy-Free',
+                    'Plant-Based',
+                    'Low FODMAP',
+                    'Keto / Low Carb',
+                    'Mediterranean',
+                  ].map((diet) => {
+                    const isSelected = dietaryPreferences.includes(diet);
+                    return (
+                      <button
+                        key={diet}
+                        type="button"
+                        onClick={() => toggleItem(dietaryPreferences, diet, setDietaryPreferences)}
+                        className={`text-xs py-2 px-3 rounded-xl border text-left font-medium transition-all ${
+                          isSelected
+                            ? 'bg-[#FF7A24] text-white border-[#FF7A24] font-bold shadow-xs'
+                            : 'bg-[#FAF8F5] text-[#132A1F] border-[#132A1F]/10 hover:border-[#FF7A24]/40'
+                        }`}
+                      >
+                        {diet} {isSelected && '✓'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-[#132A1F]/10 space-y-2">
+                <label className="text-xs font-bold text-[#132A1F] block">
+                  Known Allergies or Sensitivities
+                </label>
+                {allergies.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {allergies.map((a) => (
+                      <span
+                        key={a}
+                        onClick={() => toggleItem(allergies, a, setAllergies)}
+                        className="text-[10px] bg-[#FFE5D9] text-[#6B4435] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 cursor-pointer hover:bg-[#ffd1c0]"
+                      >
+                        {a} ✕
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Add allergy (e.g. Nuts, Soy, Shellfish...)"
+                    value={customAllergyInput}
+                    onChange={(e) => setCustomAllergyInput(e.target.value)}
+                    className="flex-1 bg-[#FAF8F5] border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (customAllergyInput.trim() && !allergies.includes(customAllergyInput.trim())) {
+                        setAllergies((prev) => [...prev, customAllergyInput.trim()]);
+                        setCustomAllergyInput('');
+                      }
+                    }}
+                    className="px-3 py-2 bg-[#FF7A24] text-white text-xs font-bold rounded-xl shadow-xs"
+                  >
+                    + Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 7: Healthcare Preferences */}
+          {step === 7 && (
             <div className="space-y-4 animate-in fade-in">
               <div className="text-center pb-1">
                 <div className="w-12 h-12 rounded-2xl bg-[#FFF4EB] border border-[#FF7A24]/30 flex items-center justify-center mx-auto mb-2 text-[#FF7A24]">
@@ -837,23 +948,24 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     'Share exported symptom reports with my healthcare provider',
                     'Manage my daily energy, tasks, and pacing',
                   ].map((pref) => (
-                    <label
+                    <div
                       key={pref}
+                      onClick={() => setSharingPreference(prev => prev === pref ? '' : pref)}
                       className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
                         sharingPreference === pref
                           ? 'bg-[#FFF4EB] border-[#FF7A24]'
-                          : 'bg-[#FAF8F5] border-[#132A1F]/10'
+                          : 'bg-[#FAF8F5] border-[#132A1F]/10 hover:border-[#132A1F]/30'
                       }`}
                     >
-                      <input
-                        type="radio"
-                        name="sharingPref"
-                        checked={sharingPreference === pref}
-                        onChange={() => setSharingPreference(pref)}
-                        className="accent-[#FF7A24] mt-0.5"
-                      />
-                      <span className="text-xs text-[#132A1F] font-medium">{pref}</span>
-                    </label>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-0.5 transition-colors ${
+                        sharingPreference === pref ? 'border-[#FF7A24] bg-[#FF7A24]' : 'border-[#132A1F]/30 bg-white'
+                      }`}>
+                        {sharingPreference === pref && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <span className={`text-xs ${sharingPreference === pref ? 'font-bold text-[#FF7A24]' : 'text-[#132A1F]'}`}>
+                        {pref}
+                      </span>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -892,8 +1004,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             </div>
           )}
 
-          {/* STEP 7: Review & Confirmation */}
-          {step === 7 && (
+          {/* STEP 8: Review & Confirmation */}
+          {step === 8 && (
             <div className="space-y-4 animate-in fade-in">
               <div className="text-center pb-1">
                 <div className="w-12 h-12 rounded-2xl bg-[#D8F3DC] border border-[#52B788]/40 flex items-center justify-center mx-auto mb-2 text-[#2D6A4F]">
@@ -975,17 +1087,35 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   </button>
                 </div>
 
-                {/* Impact & Preference */}
+                {/* Dietary Focus review card */}
                 <div className="bg-white p-3.5 rounded-2xl border border-[#132A1F]/10 flex items-start justify-between">
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF7A24]">Preferences</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF7A24]">Dietary Focus</span>
                     <div className="text-xs text-[#132A1F] font-semibold mt-0.5">
-                      {sharingPreference}
+                      {dietaryPreferences.length > 0 ? dietaryPreferences.join(', ') : 'None specified'}
+                      {allergies.length > 0 && ` · Allergies: ${allergies.join(', ')}`}
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setStep(6)}
+                    className="text-xs text-[#FF7A24] font-bold hover:underline"
+                  >
+                    Edit
+                  </button>
+                </div>
+
+                {/* Impact & Preference */}
+                <div className="bg-white p-3.5 rounded-2xl border border-[#132A1F]/10 flex items-start justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF7A24]">Healthcare Preferences</span>
+                    <div className="text-xs text-[#132A1F] font-semibold mt-0.5">
+                      {sharingPreference || 'None specified'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep(7)}
                     className="text-xs text-[#FF7A24] font-bold hover:underline"
                   >
                     Edit

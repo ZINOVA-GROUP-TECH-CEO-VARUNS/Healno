@@ -39,6 +39,7 @@ const STORAGE_KEYS = {
   WELLNESS_SESSIONS: 'healno_wellness_sessions',
   ONBOARDING_PROGRESS: 'healno_onboarding_progress',
   ONBOARDING_COMPLETED: 'healno_onboarding_completed',
+  PROVIDERS: 'healno_providers',
 };
 
 // Initial empty user profile (never fabricated with fake data)
@@ -71,6 +72,8 @@ export const defaultProfile: UserProfile = {
   badges: [],
   isOnboarded: false,
   isAuthenticated: false,
+  symptomBehavior: 'Fluctuates depending on activity and rest',
+  sharingPreference: 'Personal reflection & tracking only',
 };
 
 // Seed initial emotions (matches the reference image 420 score and 4 core emotions: Happy 48%, Sad 33%, Calm 27%, Anxious 40%)
@@ -112,60 +115,7 @@ export const defaultPacingTasks: PacingTask[] = [];
 export const defaultDocuments: MedicalDocument[] = [];
 export const defaultAppointments: Appointment[] = [];
 
-export const defaultCareProviders: CareProvider[] = [
-  {
-    id: 'prov_1',
-    name: 'Northwestern Neuro & Autonomic Care',
-    type: 'Specialist',
-    specialty: 'Dysautonomia & Neurology',
-    address: '675 N Michigan Ave, Suite 410',
-    phone: '(312) 555-0192',
-    distanceMiles: 2.4,
-    rating: 4.9,
-    bookingUrl: 'https://healno-directory.example/northwestern-neuro',
-    verified: true,
-    openNow: true,
-  },
-  {
-    id: 'prov_2',
-    name: 'Kindred Integrative Family Medicine',
-    type: 'Clinic',
-    specialty: 'Chronic Illness & Primary Care',
-    address: '1420 W Belmont Ave',
-    phone: '(773) 555-0188',
-    distanceMiles: 3.1,
-    rating: 4.8,
-    bookingUrl: 'https://healno-directory.example/belmont-clinic',
-    verified: true,
-    openNow: true,
-  },
-  {
-    id: 'prov_3',
-    name: 'Quest Diagnostic Patient Service Center',
-    type: 'Lab',
-    specialty: 'Bloodwork & Diagnostic Testing',
-    address: '2800 N Lincoln Ave',
-    phone: '(866) 555-0120',
-    distanceMiles: 1.8,
-    rating: 4.6,
-    bookingUrl: 'https://healno-directory.example/quest-lincoln',
-    verified: true,
-    openNow: true,
-  },
-  {
-    id: 'prov_4',
-    name: 'Memorial Community Hospital Outpatient',
-    type: 'Hospital',
-    specialty: 'Comprehensive Diagnostics & Imaging',
-    address: '2520 N Lakeview Ave',
-    phone: '(312) 555-0100',
-    distanceMiles: 4.0,
-    rating: 4.7,
-    bookingUrl: 'https://healno-directory.example/memorial-hospital',
-    verified: true,
-    openNow: true,
-  },
-];
+export const defaultCareProviders: CareProvider[] = [];
 
 export const defaultLessons: Lesson[] = [
   {
@@ -480,6 +430,29 @@ export const defaultMeals: MealRecipe[] = [
 
 // Helper functions for reading & writing to storage
 export const storageService = {
+  getProviders: (): CareProvider[] => {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.PROVIDERS);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+  saveProvider: (provider: CareProvider): void => {
+    const list = storageService.getProviders();
+    const idx = list.findIndex(p => p.id === provider.id);
+    if (idx >= 0) {
+      list[idx] = provider;
+    } else {
+      list.unshift(provider);
+    }
+    localStorage.setItem(STORAGE_KEYS.PROVIDERS, JSON.stringify(list));
+  },
+  deleteProvider: (id: string): void => {
+    const list = storageService.getProviders().filter(p => p.id !== id);
+    localStorage.setItem(STORAGE_KEYS.PROVIDERS, JSON.stringify(list));
+  },
+
   getProfile: (): UserProfile => {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.PROFILE);
@@ -1196,8 +1169,18 @@ export const getLocalGreeting = (location?: string, timeZone?: string, name?: st
     greeting = 'Good Evening';
   }
 
-  const trimmedName = name?.trim();
-  const fullGreeting = trimmedName ? `${greeting}, ${trimmedName}` : greeting;
+  const trimmedName = name?.trim() || '';
+  let finalName = 'Friend';
+  
+  // If the name is valid and doesn't look like an email, use it
+  if (trimmedName && !trimmedName.includes('@') && trimmedName.length >= 2) {
+    finalName = trimmedName;
+  }
+
+  // Capitalize first letter safely
+  const capitalizedName = finalName.charAt(0).toUpperCase() + finalName.slice(1);
+
+  const fullGreeting = `${greeting}, ${capitalizedName}`;
 
   return {
     greeting: fullGreeting,
