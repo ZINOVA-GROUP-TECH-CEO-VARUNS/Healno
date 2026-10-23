@@ -9,9 +9,13 @@ import {
   ArrowRight,
   CheckCircle2,
   X,
+  Loader2,
+  KeyRound,
+  Database,
 } from 'lucide-react';
 import { HealnoLogo } from '../common/HealnoLogo';
 import { WelcomeHealthcareIllustration } from '../common/CodeIllustrations';
+import { authService, getSupabaseConfig, setCustomSupabaseConfig } from '../../services/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -26,37 +30,117 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onLoginSuccess,
   onStartOnboarding,
 }) => {
-  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'otp' | 'forgot'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'otp' | 'forgot' | 'config'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [consentAccepted, setConsentAccepted] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Custom Supabase configuration inputs
+  const [supabaseUrlInput, setSupabaseUrlInput] = useState('');
+  const [supabaseKeyInput, setSupabaseKeyInput] = useState('');
+
+  const supabaseConfig = getSupabaseConfig();
 
   if (!isOpen) return null;
 
-  const handleEmailAuth = (e: React.FormEvent) => {
+  const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!consentAccepted) {
+    if (!consentAccepted && authMode === 'signup') {
       setErrorMsg('Please accept the privacy terms to continue.');
       return;
     }
     setErrorMsg('');
-    const userEmail = email.trim() || 'thexplorervaruns@gmail.com';
-    const rawName = userEmail.split('@')[0].replace(/[._]/g, ' ');
-    const computedName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-    onLoginSuccess({
-      email: userEmail,
-      name: computedName,
-      isAuthenticated: true,
-    });
-    onClose();
+    setSuccessMsg('');
+    setIsLoading(true);
+
+    try {
+      if (authMode === 'signup') {
+        const nameToUse = fullName.trim() || email.split('@')[0];
+        if (authService.isConfigured()) {
+          const { user, session, error } = await authService.signUp(email.trim(), password, nameToUse);
+          if (error) {
+            setErrorMsg(error);
+            setIsLoading(false);
+            return;
+          }
+          onLoginSuccess({
+            id: user?.id,
+            email: user?.email || email.trim(),
+            name: nameToUse,
+            isAuthenticated: true,
+          });
+        } else {
+          // Local persistent fallback
+          onLoginSuccess({
+            email: email.trim(),
+            name: nameToUse,
+            isAuthenticated: true,
+          });
+        }
+        onClose();
+      } else {
+        // Sign In
+        if (authService.isConfigured()) {
+          const { user, error } = await authService.signIn(email.trim(), password);
+          if (error) {
+            setErrorMsg(error);
+            setIsLoading(false);
+            return;
+          }
+          const userMetadataName = user?.user_metadata?.name;
+          const fallbackName = user?.email?.split('@')[0] || 'Friend';
+          onLoginSuccess({
+            id: user?.id,
+            email: user?.email || email.trim(),
+            name: userMetadataName || fallbackName,
+            isAuthenticated: true,
+          });
+        } else {
+          // Local persistent fallback
+          const rawName = email.split('@')[0].replace(/[._]/g, ' ');
+          const computedName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+          onLoginSuccess({
+            email: email.trim(),
+            name: computedName || 'Friend',
+            isAuthenticated: true,
+          });
+        }
+        onClose();
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Authentication error. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSendOtp = (e: React.FormEvent) => {
+  const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAuthMode('otp');
+    if (!email.trim()) {
+      setErrorMsg('Please enter your account email address.');
+      return;
+    }
+    setErrorMsg('');
+    setIsLoading(true);
+
+    try {
+      const { success, error } = await authService.resetPassword(email.trim());
+      if (success) {
+        setSuccessMsg('Password reset instructions have been dispatched to your email.');
+      } else {
+        setErrorMsg(error || 'Failed to dispatch reset email. Ensure Supabase credentials are configured.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to request password reset.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleVerifyOtp = (e: React.FormEvent) => {
@@ -74,28 +158,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     onClose();
   };
 
-  const handleSocialLogin = (provider: 'Google' | 'Apple') => {
-    onLoginSuccess({
-      name: 'Varun',
-      email: 'thexplorervaruns@gmail.com',
-      isAuthenticated: true,
-    });
-    onClose();
+  const handleSaveCustomSupabase = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supabaseUrlInput.trim() || !supabaseKeyInput.trim()) {
+      setErrorMsg('Please enter both your Supabase Project URL and Public Anon Key.');
+      return;
+    }
+    setCustomSupabaseConfig(supabaseUrlInput.trim(), supabaseKeyInput.trim());
+    window.location.reload();
   };
-
 
   return (
     <div className="fixed inset-0 z-50 bg-[#132A1F]/80 backdrop-blur-md flex items-center justify-center p-4">
       <div className="bg-[#FAF8F5] w-full max-w-md rounded-3xl overflow-hidden shadow-2xl border border-[#132A1F]/10 animate-in zoom-in-95 duration-200">
-        {/* Visual Hero Header featuring code-based illustration */}
+        {/* Visual Hero Header */}
         <div className="relative py-6 px-5 bg-gradient-to-br from-[#132A1F] to-[#2D6A4F] text-white flex items-center justify-between">
           <div className="space-y-1 z-10">
             <div className="flex items-center gap-2 text-[#FF7A24] text-xs font-bold mb-0.5">
               <HealnoLogo size="xs" />
-              <span>Welcome to Healno</span>
+              <span>Healno Health Vault</span>
             </div>
             <h2 className="text-xl font-bold font-display text-white">A Calm Space for Your Health</h2>
-            <p className="text-xs text-white/70">Private, secure, and spoon-conscious</p>
+            <p className="text-xs text-white/70">
+              {supabaseConfig.isConfigured ? '🟢 Supabase PostgreSQL & Auth Active' : '🟡 Local Encrypted Session'}
+            </p>
           </div>
 
           <div className="shrink-0 pl-3">
@@ -118,6 +204,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               onClick={() => {
                 setAuthMode('login');
                 setErrorMsg('');
+                setSuccessMsg('');
               }}
               className={`flex-1 py-1.5 rounded-xl transition-all ${
                 authMode === 'login' ? 'bg-white text-[#132A1F] shadow-xs' : 'text-[#132A1F]/60'
@@ -129,41 +216,78 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               onClick={() => {
                 setAuthMode('signup');
                 setErrorMsg('');
+                setSuccessMsg('');
               }}
               className={`flex-1 py-1.5 rounded-xl transition-all ${
                 authMode === 'signup' ? 'bg-white text-[#132A1F] shadow-xs' : 'text-[#132A1F]/60'
               }`}
             >
-              New Account
+              Sign Up
             </button>
             <button
               onClick={() => {
-                setAuthMode('otp');
+                setAuthMode('forgot');
                 setErrorMsg('');
+                setSuccessMsg('');
               }}
               className={`flex-1 py-1.5 rounded-xl transition-all ${
-                authMode === 'otp' ? 'bg-white text-[#132A1F] shadow-xs' : 'text-[#132A1F]/60'
+                authMode === 'forgot' ? 'bg-white text-[#132A1F] shadow-xs' : 'text-[#132A1F]/60'
               }`}
             >
-              Phone OTP
+              Reset
+            </button>
+            <button
+              onClick={() => {
+                setAuthMode('config');
+                setErrorMsg('');
+                setSuccessMsg('');
+              }}
+              className={`py-1.5 px-2 rounded-xl transition-all ${
+                authMode === 'config' ? 'bg-white text-[#2D6A4F] shadow-xs' : 'text-[#132A1F]/60'
+              }`}
+              title="Supabase Database Settings"
+            >
+              <Database className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {errorMsg && (
-            <div className="text-xs text-[#E76F51] bg-[#FFE5D9] p-2.5 rounded-xl">
-              {errorMsg}
+            <div className="text-xs text-[#E76F51] bg-[#FFE5D9] p-2.5 rounded-xl flex items-start gap-1.5">
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="text-xs text-[#2D6A4F] bg-[#E8EFE9] p-2.5 rounded-xl flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{successMsg}</span>
             </div>
           )}
 
           {/* Email / Password Forms */}
           {(authMode === 'login' || authMode === 'signup') && (
             <form onSubmit={handleEmailAuth} className="space-y-3">
+              {authMode === 'signup' && (
+                <div>
+                  <label className="text-xs font-semibold text-[#132A1F] block mb-1">Your Full Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Varun"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs focus:outline-none"
+                    required
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="text-xs font-semibold text-[#132A1F] block mb-1">Email Address</label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-[#132A1F]/40 absolute left-3 top-3" />
                   <input
                     type="email"
+                    placeholder="you@domain.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full bg-white border border-[#132A1F]/15 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none"
@@ -173,11 +297,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-[#132A1F] block mb-1">Password</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-[#132A1F]">Password</label>
+                  {authMode === 'login' && (
+                    <button
+                      type="button"
+                      onClick={() => setAuthMode('forgot')}
+                      className="text-[10px] text-[#2D6A4F] hover:underline"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-[#132A1F]/40 absolute left-3 top-3" />
                   <input
                     type="password"
+                    placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full bg-white border border-[#132A1F]/15 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none"
@@ -186,93 +322,107 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
-              {/* Consent checkbox */}
-              <div className="flex items-start gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="consent"
-                  checked={consentAccepted}
-                  onChange={(e) => setConsentAccepted(e.target.checked)}
-                  className="w-4 h-4 accent-[#132A1F] mt-0.5 rounded"
-                />
-                <label htmlFor="consent" className="text-[11px] text-[#132A1F]/70 cursor-pointer">
-                  I accept the Healno Privacy Consent & Terms for sensitive personal health records.
-                </label>
-              </div>
+              {authMode === 'signup' && (
+                <div className="flex items-start gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="consent"
+                    checked={consentAccepted}
+                    onChange={(e) => setConsentAccepted(e.target.checked)}
+                    className="w-4 h-4 accent-[#132A1F] mt-0.5 rounded"
+                  />
+                  <label htmlFor="consent" className="text-[11px] text-[#132A1F]/70 cursor-pointer">
+                    I accept the Healno Privacy Terms for personal health records.
+                  </label>
+                </div>
+              )}
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-full bg-[#132A1F] hover:bg-[#2D6A4F] text-white font-bold text-xs shadow-md transition-colors font-display"
+                disabled={isLoading}
+                className="w-full py-3 rounded-full bg-[#132A1F] hover:bg-[#2D6A4F] text-white font-bold text-xs shadow-md transition-colors font-display flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                {authMode === 'login' ? 'Sign In to Healno' : 'Create Free Healno Account'}
+                {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                <span>{authMode === 'login' ? 'Sign In to Healno' : 'Create Supabase Account'}</span>
               </button>
             </form>
           )}
 
-          {/* Phone OTP Verification */}
-          {authMode === 'otp' && (
-            <div className="space-y-3">
+          {/* Forgot Password Form */}
+          {authMode === 'forgot' && (
+            <form onSubmit={handleForgotPassword} className="space-y-3">
+              <p className="text-xs text-[#132A1F]/70">
+                Enter your account email address and we'll send a secure password reset link via Supabase Auth.
+              </p>
               <div>
-                <label className="text-xs font-semibold text-[#132A1F] block mb-1">Phone Number</label>
+                <label className="text-xs font-semibold text-[#132A1F] block mb-1">Email Address</label>
                 <div className="relative">
-                  <Phone className="w-4 h-4 text-[#132A1F]/40 absolute left-3 top-3" />
+                  <Mail className="w-4 h-4 text-[#132A1F]/40 absolute left-3 top-3" />
                   <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    type="email"
+                    placeholder="you@domain.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="w-full bg-white border border-[#132A1F]/15 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none"
+                    required
                   />
                 </div>
               </div>
 
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 rounded-full bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-bold text-xs shadow-md transition-colors flex items-center justify-center gap-2"
+              >
+                {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                <span>Send Reset Link</span>
+              </button>
+            </form>
+          )}
+
+          {/* Database / Supabase Config Settings */}
+          {authMode === 'config' && (
+            <form onSubmit={handleSaveCustomSupabase} className="space-y-3 text-xs">
+              <div className="bg-[#E8EFE9] p-3 rounded-2xl text-[11px] text-[#132A1F]/80">
+                <span className="font-bold block text-[#132A1F] mb-0.5">Supabase Configuration</span>
+                <span>
+                  Connect your real Supabase project to synchronize medical reports, profiles, and wellness sessions with PostgreSQL and private Storage.
+                </span>
+              </div>
+
               <div>
-                <label className="text-xs font-semibold text-[#132A1F] block mb-1">
-                  Verification Code (Enter 4 Digits)
-                </label>
+                <label className="font-semibold block mb-1">Supabase URL</label>
                 <input
                   type="text"
-                  maxLength={6}
-                  placeholder="1234"
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value)}
-                  className="w-full text-center tracking-widest text-lg font-bold bg-white border border-[#132A1F]/15 rounded-xl py-2 focus:outline-none font-display"
+                  placeholder="https://your-project.supabase.co"
+                  value={supabaseUrlInput}
+                  onChange={(e) => setSupabaseUrlInput(e.target.value)}
+                  className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-3 py-2 focus:outline-none text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-1">Public Anon Key</label>
+                <input
+                  type="password"
+                  placeholder="eyJhbGciOi..."
+                  value={supabaseKeyInput}
+                  onChange={(e) => setSupabaseKeyInput(e.target.value)}
+                  className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-3 py-2 focus:outline-none text-xs"
                 />
               </div>
 
               <button
-                onClick={handleVerifyOtp}
-                className="w-full py-3 rounded-full bg-[#E89D35] hover:bg-[#d88d25] text-white font-bold text-xs shadow-md transition-colors font-display"
+                type="submit"
+                className="w-full py-2.5 rounded-full bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-bold text-xs"
               >
-                Verify & Enter
+                Save & Connect Database
               </button>
-            </div>
+            </form>
           )}
 
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-2 text-[10px] text-[#132A1F]/40 uppercase tracking-wider font-semibold">
-            <div className="flex-1 h-px bg-[#132A1F]/10" />
-            <span>or sign in with</span>
-            <div className="flex-1 h-px bg-[#132A1F]/10" />
-          </div>
-
-          {/* Social Sign In Buttons */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => handleSocialLogin('Google')}
-              className="py-2.5 px-3 rounded-xl border border-[#132A1F]/15 bg-white hover:bg-[#F8F6F0] text-xs font-semibold text-[#132A1F] transition-colors flex items-center justify-center gap-2"
-            >
-              <span>Google</span>
-            </button>
-            <button
-              onClick={() => handleSocialLogin('Apple')}
-              className="py-2.5 px-3 rounded-xl border border-[#132A1F]/15 bg-white hover:bg-[#F8F6F0] text-xs font-semibold text-[#132A1F] transition-colors flex items-center justify-center gap-2"
-            >
-              <span>Apple</span>
-            </button>
-          </div>
-
           {/* Guided Onboarding shortcut */}
-          <div className="pt-2 text-center">
+          <div className="pt-2 text-center border-t border-[#132A1F]/10">
             <button
               onClick={() => {
                 onClose();
@@ -280,7 +430,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               }}
               className="text-xs text-[#2D6A4F] hover:underline font-semibold flex items-center justify-center gap-1 mx-auto"
             >
-              <span>New to Healno? Take Guided Onboarding</span>
+              <span>Take Guided Pacing Onboarding</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

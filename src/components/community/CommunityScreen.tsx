@@ -8,8 +8,9 @@ import {
   Search,
   Filter,
   AlertTriangle,
-  UserCheck,
   Send,
+  Trash2,
+  Tag,
   Sparkles,
 } from 'lucide-react';
 import { UserAvatar } from '../common/UserAvatar';
@@ -20,6 +21,8 @@ interface CommunityScreenProps {
   onAddPost: (post: CommunityPost) => void;
   onReact: (postId: string, reaction: 'hug' | 'spoon' | 'strength' | 'heart') => void;
   onAddComment: (postId: string, comment: string) => void;
+  onDeletePost?: (postId: string) => void;
+  onRemoveAllMessages?: () => void;
 }
 
 export const CommunityScreen: React.FC<CommunityScreenProps> = ({
@@ -28,20 +31,23 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
   onAddPost,
   onReact,
   onAddComment,
+  onDeletePost,
+  onRemoveAllMessages,
 }) => {
   const [selectedTopic, setSelectedTopic] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewPostModal, setShowNewPostModal] = useState(false);
+  const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
   const [activeCommentPostId, setActiveCommentPostId] = useState<string | null>(null);
   const [commentInput, setCommentInput] = useState('');
 
-  // New post form
+  // New post form state
   const [postTitle, setPostTitle] = useState('');
   const [postContent, setPostContent] = useState('');
-  const [postTopic, setPostTopic] = useState<'pacing' | 'fatigue' | 'coping' | 'nutrition' | 'work_school' | 'appointments'>('pacing');
-  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [postTopicSelect, setPostTopicSelect] = useState<string>('pacing');
+  const [customTopicName, setCustomTopicName] = useState('');
 
-  const topics = [
+  const defaultTopics = [
     { id: 'all', label: 'All Topics' },
     { id: 'pacing', label: 'Pacing & Spoons' },
     { id: 'fatigue', label: 'Fatigue Science' },
@@ -50,6 +56,17 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
     { id: 'work_school', label: 'Work & Accommodations' },
     { id: 'appointments', label: 'Doctor Prep & Visits' },
   ];
+
+  // Dynamically collect custom topics from current posts
+  const postTopicIds = Array.from(new Set(posts.map((p) => p.topic).filter(Boolean)));
+  const customTopicPills = postTopicIds
+    .filter((id) => !defaultTopics.some((dt) => dt.id === id))
+    .map((id) => ({
+      id,
+      label: id.charAt(0).toUpperCase() + id.slice(1).replace(/_/g, ' '),
+    }));
+
+  const allTopicPills = [...defaultTopics, ...customTopicPills];
 
   const filteredPosts = posts.filter((p) => {
     const matchesTopic = selectedTopic === 'all' || p.topic === selectedTopic;
@@ -64,15 +81,19 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
     e.preventDefault();
     if (!postTitle.trim() || !postContent.trim()) return;
 
+    const finalTopic = postTopicSelect === 'custom'
+      ? (customTopicName.trim() || 'General')
+      : postTopicSelect;
+
     const newPost: CommunityPost = {
       id: `post_${Date.now()}`,
-      authorName: isAnonymous ? 'Anonymous Friend' : currentUserName,
-      isAnonymous,
+      authorName: currentUserName || 'Community Member',
+      isAnonymous: false, // Per requirements: Post anonymously completely removed, always published under user's profile
       timeAgo: 'Just now',
-      topic: postTopic,
+      topic: finalTopic as any,
       title: postTitle.trim(),
       content: postContent.trim(),
-      tags: [postTopic, 'Shared Experience'],
+      tags: [finalTopic, 'Shared Experience'],
       reactions: { hug: 1, spoon: 1, strength: 1, heart: 1 },
       commentsCount: 0,
       comments: [],
@@ -82,6 +103,8 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
     setShowNewPostModal(false);
     setPostTitle('');
     setPostContent('');
+    setCustomTopicName('');
+    setPostTopicSelect('pacing');
   };
 
   const handlePostComment = (postId: string) => {
@@ -90,22 +113,42 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
     setCommentInput('');
   };
 
+  const handleConfirmClearAll = () => {
+    if (onRemoveAllMessages) {
+      onRemoveAllMessages();
+    }
+    setShowClearConfirmModal(false);
+  };
+
   return (
     <div className="pb-28 pt-2 px-4 max-w-xl mx-auto space-y-4 animate-in fade-in duration-300">
       {/* Top Header */}
       <div className="flex items-center justify-between py-2">
         <div>
           <h2 className="text-xl font-bold text-[#132A1F] font-display">Healno Community Circle</h2>
-          <p className="text-xs text-[#132A1F]/60">Peer kindness, spoon sharing, and shared wisdom</p>
+          <p className="text-xs text-[#132A1F]/60">Peer kindness, spoon sharing, and authentic wisdom</p>
         </div>
 
-        <button
-          onClick={() => setShowNewPostModal(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span>Share</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {posts.length > 0 && onRemoveAllMessages && (
+            <button
+              onClick={() => setShowClearConfirmModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-red-200 text-red-600 hover:bg-red-50 text-xs font-semibold transition-colors"
+              title="Remove All Messages"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Remove All</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => setShowNewPostModal(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Share</span>
+          </button>
+        </div>
       </div>
 
       {/* Safety and Guidelines Banner */}
@@ -128,9 +171,9 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
         />
       </div>
 
-      {/* Topic Filter Pills */}
+      {/* Topic Filter Pills (Includes standard + user-created custom topics) */}
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
-        {topics.map((t) => (
+        {allTopicPills.map((t) => (
           <button
             key={t.id}
             onClick={() => setSelectedTopic(t.id)}
@@ -145,37 +188,72 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
         ))}
       </div>
 
+      {/* Empty State */}
+      {filteredPosts.length === 0 && (
+        <div className="bg-white rounded-3xl p-8 text-center border border-[#132A1F]/10 space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-[#FFF4EB] text-[#FF7A24] flex items-center justify-center mx-auto">
+            <MessageCircle className="w-6 h-6" />
+          </div>
+          <h3 className="text-sm font-bold text-[#132A1F]">No messages in this circle topic yet</h3>
+          <p className="text-xs text-[#132A1F]/60 max-w-sm mx-auto">
+            Be the first to share an encouraging note, pacing breakthrough, or ask for peer support.
+          </p>
+          <button
+            onClick={() => setShowNewPostModal(true)}
+            className="px-4 py-2 rounded-full bg-[#132A1F] text-white text-xs font-semibold hover:bg-[#2D6A4F] transition-colors"
+          >
+            Start a Conversation
+          </button>
+        </div>
+      )}
+
       {/* Feed List */}
       <div className="space-y-4">
         {filteredPosts.map((post) => {
           const isCommentsOpen = activeCommentPostId === post.id;
+          const isOwnPost = post.authorName === currentUserName;
           return (
             <div
               key={post.id}
               className="bg-white rounded-3xl p-4.5 border border-[#132A1F]/10 shadow-xs space-y-3"
             >
-              {/* Author info */}
+              {/* Author info (Always authenticated community profile) */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <UserAvatar name={post.isAnonymous ? '' : post.authorName} size="sm" />
+                  <UserAvatar name={post.authorName} size="sm" />
                   <div>
                     <div className="text-xs font-bold text-[#132A1F] flex items-center gap-1.5">
                       <span>{post.authorName}</span>
-                      {post.isAnonymous && (
-                        <span className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.2 rounded-md">
-                          Anonymous
+                      {isOwnPost && (
+                        <span className="text-[9px] bg-[#B7E4C7]/30 text-[#1B4332] px-1.5 py-0.2 rounded-md font-semibold">
+                          You
                         </span>
                       )}
                     </div>
                     <div className="text-[10px] text-[#132A1F]/50">
-                      {post.timeAgo} · in {post.topic}
+                      {post.timeAgo} · in {post.topic.replace(/_/g, ' ')}
                     </div>
                   </div>
                 </div>
 
-                <span className="text-[10px] bg-[#FFE5D9] text-[#6B4435] px-2 py-0.5 rounded-full font-semibold capitalize">
-                  {post.topic.replace('_', ' & ')}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] bg-[#FFE5D9] text-[#6B4435] px-2 py-0.5 rounded-full font-semibold capitalize">
+                    {post.topic.replace(/_/g, ' ')}
+                  </span>
+                  {onDeletePost && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Delete this community post?')) {
+                          onDeletePost(post.id);
+                        }
+                      }}
+                      className="text-[#132A1F]/30 hover:text-red-500 p-1 transition-colors"
+                      title="Delete post"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Title & Content */}
@@ -262,7 +340,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
                   </button>
                 </div>
 
-                {/* Comment count */}
+                {/* Comment count toggle */}
                 <button
                   onClick={() =>
                     setActiveCommentPostId(isCommentsOpen ? null : post.id)
@@ -321,7 +399,40 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
         })}
       </div>
 
-      {/* New Post Modal */}
+      {/* Confirmation Modal for Remove All Messages */}
+      {showClearConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white max-w-sm w-full rounded-3xl p-6 shadow-2xl border border-red-100 text-center space-y-4 animate-in zoom-in-95">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-[#132A1F] font-display">Remove All Messages?</h3>
+              <p className="text-xs text-[#132A1F]/70 mt-1 leading-relaxed">
+                Are you sure you want to remove all community posts and discussions from the circle? This action cannot be undone.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowClearConfirmModal(false)}
+                className="py-2.5 rounded-full border border-[#132A1F]/15 text-xs font-semibold text-[#132A1F] hover:bg-[#F8F6F0]"
+              >
+                Keep Messages
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmClearAll}
+                className="py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md transition-colors"
+              >
+                Yes, Remove All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Post Modal with Topic selection & Custom Topic creation */}
       {showNewPostModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -337,21 +448,32 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
               </button>
             </div>
 
+            {/* Posting identity reassurance (Profile based, no anonymous) */}
+            <div className="mt-3 bg-[#E8EFE9] text-[#132A1F]/90 text-xs p-3 rounded-2xl flex items-center gap-2.5 border border-[#2D6A4F]/10">
+              <UserAvatar name={currentUserName} size="sm" />
+              <div className="text-[11px]">
+                Publishing as <strong className="text-[#132A1F]">{currentUserName}</strong> with your verified community profile.
+              </div>
+            </div>
+
             {/* Privacy Warning */}
-            <div className="mt-3 bg-[#FFE5D9] text-[#6B4435] text-xs p-3 rounded-2xl flex items-start gap-2">
+            <div className="mt-2 bg-[#FFE5D9] text-[#6B4435] text-xs p-3 rounded-2xl flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-[#E76F51] shrink-0 mt-0.5" />
-              <span>
-                <strong>Privacy check:</strong> Never share sensitive clinical numbers, full names of clinic staff, or private contact details.
+              <span className="text-[11px]">
+                <strong>Privacy check:</strong> Never share sensitive clinical numbers, personal contact details, or clinic staff full names.
               </span>
             </div>
 
             <form onSubmit={handleCreatePost} className="mt-4 space-y-4">
+              {/* Topic Selection with Custom Topic Option */}
               <div>
-                <label className="text-xs font-semibold text-[#132A1F] block mb-1">Topic</label>
+                <label className="text-xs font-semibold text-[#132A1F] block mb-1">
+                  Select Topic or Create Custom
+                </label>
                 <select
-                  value={postTopic}
-                  onChange={(e) => setPostTopic(e.target.value as any)}
-                  className="w-full bg-[#F8F6F0] border border-[#132A1F]/15 rounded-xl px-3 py-2 text-sm focus:outline-none"
+                  value={postTopicSelect}
+                  onChange={(e) => setPostTopicSelect(e.target.value)}
+                  className="w-full bg-[#F8F6F0] border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#FF7A24]"
                 >
                   <option value="pacing">Pacing & Spoons</option>
                   <option value="fatigue">Fatigue Science</option>
@@ -359,7 +481,34 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
                   <option value="nutrition">Gentle Nutrition</option>
                   <option value="work_school">Work & Accommodations</option>
                   <option value="appointments">Doctor Prep & Visits</option>
+                  {customTopicPills.map((ct) => (
+                    <option key={ct.id} value={ct.id}>
+                      {ct.label}
+                    </option>
+                  ))}
+                  <option value="custom">✨ + Create Custom Topic...</option>
                 </select>
+
+                {/* Custom topic input field */}
+                {postTopicSelect === 'custom' && (
+                  <div className="mt-2 animate-in fade-in">
+                    <div className="relative">
+                      <Tag className="w-3.5 h-3.5 text-[#FF7A24] absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="Enter custom topic name (e.g. Brain Fog Hacks, Dysautonomia Tips)"
+                        value={customTopicName}
+                        onChange={(e) => setCustomTopicName(e.target.value)}
+                        className="w-full bg-[#FFF4EB] border border-[#FF7A24]/40 rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#FF7A24]"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                    <p className="text-[10px] text-[#132A1F]/50 mt-1 pl-1">
+                      This custom topic will be published and available for other members to explore.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -369,7 +518,7 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
                   placeholder="e.g. A small victory on pacing my mornings..."
                   value={postTitle}
                   onChange={(e) => setPostTitle(e.target.value)}
-                  className="w-full bg-[#F8F6F0] border border-[#132A1F]/15 rounded-xl px-3 py-2 text-sm focus:outline-none"
+                  className="w-full bg-[#F8F6F0] border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#FF7A24]"
                   required
                 />
               </div>
@@ -381,22 +530,9 @@ export const CommunityScreen: React.FC<CommunityScreenProps> = ({
                   value={postContent}
                   onChange={(e) => setPostContent(e.target.value)}
                   rows={4}
-                  className="w-full bg-[#F8F6F0] border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs focus:outline-none"
+                  className="w-full bg-[#F8F6F0] border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#FF7A24]"
                   required
                 />
-              </div>
-
-              <div className="flex items-center gap-2 p-3 bg-[#F8F6F0] rounded-xl">
-                <input
-                  type="checkbox"
-                  id="anonCheck"
-                  checked={isAnonymous}
-                  onChange={(e) => setIsAnonymous(e.target.checked)}
-                  className="w-4 h-4 accent-[#132A1F] rounded"
-                />
-                <label htmlFor="anonCheck" className="text-xs text-[#132A1F] font-medium cursor-pointer">
-                  Post anonymously (hides your name & avatar)
-                </label>
               </div>
 
               <button

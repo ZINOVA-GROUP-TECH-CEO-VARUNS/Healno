@@ -239,6 +239,16 @@ export default function App() {
     setCommunityPosts(storageService.getCommunityPosts());
   };
 
+  const handleDeleteCommunityPost = async (postId: string) => {
+    await dbService.deleteCommunityPost(postId);
+    setCommunityPosts(storageService.getCommunityPosts());
+  };
+
+  const handleRemoveAllCommunityPosts = async () => {
+    await dbService.clearAllCommunityPosts();
+    setCommunityPosts([]);
+  };
+
   const handleSaveMeal = (meal: MealRecipe) => {
     storageService.saveMeal(meal);
     setMeals(storageService.getMeals());
@@ -347,6 +357,7 @@ export default function App() {
           setProfileInitialTab('calendar');
           setActiveSecondaryView('profile');
         }}
+        onUpdateCapacity={handleUpdateCapacity}
         onOpenAI={() => setIsAIModalOpen(true)}
         onBackToWebsite={() => setViewMode('website')}
       />
@@ -461,6 +472,7 @@ export default function App() {
             }}
             onOpenAppointments={() => setActiveSecondaryView('appointments')}
             onOpenJournal={() => setActiveSecondaryView('journal')}
+            onUpdateCapacity={handleUpdateCapacity}
           />
         )}
 
@@ -498,6 +510,8 @@ export default function App() {
             onAddPost={handleAddCommunityPost}
             onReact={handleReactCommunityPost}
             onAddComment={handleAddCommunityComment}
+            onDeletePost={handleDeleteCommunityPost}
+            onRemoveAllMessages={handleRemoveAllCommunityPosts}
           />
         )}
       </main>

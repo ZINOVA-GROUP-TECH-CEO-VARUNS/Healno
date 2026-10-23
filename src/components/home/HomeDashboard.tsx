@@ -30,9 +30,11 @@ import {
   Target,
   ArrowRight,
   MapPin,
+  Sliders,
 } from 'lucide-react';
 import { SunMorningIllustration, EmptyStateIllustration } from '../common/CodeIllustrations';
 import { storageService, getLocalGreeting } from '../../services/storage';
+import { SpoonCapacitySelector } from '../common/SpoonCapacitySelector';
 
 interface HomeDashboardProps {
   profile: UserProfile;
@@ -59,6 +61,7 @@ interface HomeDashboardProps {
   onOpenLessons?: () => void;
   onOpenDocuments?: () => void;
   onOpenAppointments?: () => void;
+  onUpdateCapacity?: (newCapacity: number) => void;
 }
 
 export const HomeDashboard: React.FC<HomeDashboardProps> = ({
@@ -86,7 +89,9 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   onOpenLessons,
   onOpenDocuments = () => onNavigateTab('profile'),
   onOpenAppointments = () => onNavigateTab('appointments'),
+  onUpdateCapacity,
 }) => {
+  const [isSpoonModalOpen, setIsSpoonModalOpen] = React.useState(false);
   const effectiveTasks = tasks || pacingTasks || [];
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -169,13 +174,25 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
               </p>
             </div>
 
-            <button
-              onClick={onOpenSpace}
-              className="text-xs bg-[#FF7A24] hover:bg-[#d86214] text-white font-bold px-3.5 py-1.5 rounded-full transition-all shadow-xs flex items-center gap-1 active:scale-95"
-            >
-              <span>Activity Space</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-2">
+              {onUpdateCapacity && (
+                <button
+                  onClick={() => setIsSpoonModalOpen(true)}
+                  className="text-xs bg-white/10 hover:bg-white/20 text-white font-bold px-3 py-1.5 rounded-full transition-all shadow-xs flex items-center gap-1 active:scale-95"
+                  title="Adjust daily spoon capacity (12 to 24 or custom)"
+                >
+                  <Sliders className="w-3.5 h-3.5 text-[#FF7A24]" />
+                  <span>Adjust Spoons</span>
+                </button>
+              )}
+              <button
+                onClick={onOpenSpace}
+                className="text-xs bg-[#FF7A24] hover:bg-[#d86214] text-white font-bold px-3.5 py-1.5 rounded-full transition-all shadow-xs flex items-center gap-1 active:scale-95"
+              >
+                <span>Activity Space</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           {/* Spoon progress bar */}
@@ -194,6 +211,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
       </div>
 
       {/* ================= CLINICAL & DATA SUMMARIES (CLICKABLE) ================= */}
+
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
           <h2 className="text-sm font-bold text-[#132A1F] uppercase tracking-wider">
@@ -646,6 +664,16 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           <span className="text-[10px] font-bold text-[#9A3412] mt-2 group-hover:underline">Connect →</span>
         </button>
       </div>
+
+      {/* Customizable Spoon Count Modal */}
+      {isSpoonModalOpen && onUpdateCapacity && (
+        <SpoonCapacitySelector
+          currentCapacity={dailyCapacity}
+          remainingSpoons={remainingSpoons}
+          onUpdateCapacity={onUpdateCapacity}
+          onClose={() => setIsSpoonModalOpen(false)}
+        />
+      )}
     </div>
   );
 };

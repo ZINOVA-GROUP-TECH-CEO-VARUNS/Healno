@@ -16,6 +16,7 @@ import {
   JournalEntry,
   ActivityEntry,
   JournalTask,
+  WellnessSession,
 } from '../types';
 
 const STORAGE_KEYS = {
@@ -35,6 +36,7 @@ const STORAGE_KEYS = {
   ACHIEVEMENTS: 'healno_achievements',
   MEALS: 'healno_meals',
   MEAL_PLAN: 'healno_daily_meal_plan',
+  WELLNESS_SESSIONS: 'healno_wellness_sessions',
   ONBOARDING_PROGRESS: 'healno_onboarding_progress',
   ONBOARDING_COMPLETED: 'healno_onboarding_completed',
 };
@@ -637,9 +639,14 @@ export const storageService = {
   },
   saveDocument: (doc: MedicalDocument): void => {
     const list = storageService.getDocuments();
-    const idx = list.findIndex(d => d.id === doc.id);
-    if (idx >= 0) {
-      list[idx] = doc;
+    const existingIndex = list.findIndex(d => 
+      (d.fileName && doc.fileName && d.fileName.toLowerCase() === doc.fileName.toLowerCase() && d.fileSize === doc.fileSize) ||
+      (d.fileUrl && doc.fileUrl && d.fileUrl === doc.fileUrl) ||
+      (d.id === doc.id)
+    );
+
+    if (existingIndex >= 0) {
+      list[existingIndex] = { ...list[existingIndex], ...doc, id: list[existingIndex].id };
     } else {
       list.unshift(doc);
     }
@@ -739,6 +746,37 @@ export const storageService = {
       post.commentsCount = post.comments.length;
       localStorage.setItem(STORAGE_KEYS.COMMUNITY_POSTS, JSON.stringify(list));
     }
+  },
+  deleteCommunityPost: (postId: string): void => {
+    const list = storageService.getCommunityPosts().filter(p => p.id !== postId);
+    localStorage.setItem(STORAGE_KEYS.COMMUNITY_POSTS, JSON.stringify(list));
+  },
+  clearAllCommunityPosts: (): void => {
+    localStorage.setItem(STORAGE_KEYS.COMMUNITY_POSTS, JSON.stringify([]));
+  },
+
+  // Wellness Sessions (Guided Breathing, Meditation, Mindfulness, Stretching, Rest)
+  getWellnessSessions: (): WellnessSession[] => {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.WELLNESS_SESSIONS);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+  saveWellnessSession: (session: WellnessSession): void => {
+    const list = storageService.getWellnessSessions();
+    const idx = list.findIndex(s => s.id === session.id);
+    if (idx >= 0) {
+      list[idx] = session;
+    } else {
+      list.unshift(session);
+    }
+    localStorage.setItem(STORAGE_KEYS.WELLNESS_SESSIONS, JSON.stringify(list));
+  },
+  deleteWellnessSession: (id: string): void => {
+    const list = storageService.getWellnessSessions().filter(s => s.id !== id);
+    localStorage.setItem(STORAGE_KEYS.WELLNESS_SESSIONS, JSON.stringify(list));
   },
 
   getAchievements: (): Achievement[] => {

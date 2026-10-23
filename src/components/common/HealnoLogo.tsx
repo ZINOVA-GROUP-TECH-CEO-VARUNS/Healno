@@ -8,8 +8,9 @@ interface HealnoLogoProps {
 }
 
 /**
- * HealnoLogo — Code-based vector logo
- * Combines an orange medical cross (#FF7A24) with an integrated healing heart symbol.
+ * HealnoLogo — Pure code-based SVG recreation of the official Healno brand mark.
+ * Exact recreation of the vibrant orange rounded medical cross with centered white heart.
+ * Matches design, shapes, proportions, and colors from reference image.
  */
 export const HealnoLogo: React.FC<HealnoLogoProps> = ({
   size = 36,
@@ -17,55 +18,83 @@ export const HealnoLogo: React.FC<HealnoLogoProps> = ({
   showText = false,
   textColor = '#132A1F',
 }) => {
-  const dimension = typeof size === 'number' ? `${size}px` : size;
+  const sizeMap: Record<string, string> = {
+    xs: '24px',
+    sm: '32px',
+    md: '40px',
+    lg: '52px',
+    xl: '64px',
+  };
+  const dimension = typeof size === 'number' ? `${size}px` : (sizeMap[size] || size);
 
   return (
-    <div className={`inline-flex items-center gap-2 select-none ${className}`}>
+    <div className={`inline-flex items-center gap-2.5 select-none ${className}`}>
       <svg
         width={dimension}
         height={dimension}
-        viewBox="0 0 100 100"
+        viewBox="0 0 240 240"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        aria-label="Healno Logo"
+        aria-label="Healno Brand Logo"
         role="img"
         className="shrink-0 transition-transform duration-200"
       >
-        <defs>
-          <linearGradient id="healnoOrangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#FF8F3D" />
-            <stop offset="100%" stopColor="#FF7A24" />
-          </linearGradient>
-          <filter id="softGlow" x="-10%" y="-10%" width="120%" height="120%" filterUnits="userSpaceOnUse">
-            <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#FF7A24" floodOpacity="0.25" />
-          </filter>
-        </defs>
-
-        {/* Rounded square container with soft orange gradient */}
-        <rect
-          x="4"
-          y="4"
-          width="92"
-          height="92"
-          rx="24"
-          fill="url(#healnoOrangeGrad)"
-          filter="url(#softGlow)"
-        />
-
-        {/* Outer White Medical Cross with soft rounded pill ends */}
-        {/* Vertical cross bar */}
-        <rect x="41" y="20" width="18" height="60" rx="9" fill="#FFFFFF" />
-        {/* Horizontal cross bar */}
-        <rect x="20" y="41" width="60" height="18" rx="9" fill="#FFFFFF" />
-
-        {/* Central Heart Motif in Healno Orange cut out of the cross center */}
+        {/* 
+          Main Orange Rounded Cross:
+          Width: 156px (42 to 198), Height: 156px (42 to 198)
+          Arm thickness: 68px
+          Outer cap corners: rx/ry = 26px
+          Inner concave corner fillets: r = 8px
+        */}
         <path
-          d="M50 63.5C50 63.5 35 52.5 35 43.5C35 38.5 39 34.5 44 34.5C47 34.5 49 36 50 37.5C51 36 53 34.5 56 34.5C61 34.5 65 38.5 65 43.5C65 52.5 50 63.5 50 63.5Z"
-          fill="#FF7A24"
+          d="
+            M 112 42
+            L 128 42
+            C 143 42 154 53 154 68
+            L 154 78
+            C 154 83 157 86 162 86
+            L 172 86
+            C 187 86 198 97 198 112
+            L 198 128
+            C 198 143 187 154 172 154
+            L 162 154
+            C 157 154 154 157 154 162
+            L 154 172
+            C 154 187 143 198 128 198
+            L 112 198
+            C 97 198 86 187 86 172
+            L 86 162
+            C 86 157 83 154 78 154
+            L 68 154
+            C 53 154 42 143 42 128
+            L 42 112
+            C 42 97 53 86 68 86
+            L 78 86
+            C 83 86 86 83 86 78
+            L 86 68
+            C 86 53 97 42 112 42
+            Z
+          "
+          fill="#FF6A00"
         />
 
-        {/* Small subtle accent spark at top-right of cross */}
-        <circle cx="73" cy="27" r="3.5" fill="#FFFFFF" opacity="0.9" />
+        {/* 
+          Centered White Heart Motif:
+          Smooth curved lobes, natural center cleft, gracefully tapering to bottom point
+        */}
+        <path
+          d="
+            M 120 100
+            C 114 87 99 83 87 90
+            C 75 97 73 111 80 123
+            C 88 136 106 148 120 158
+            C 134 148 152 136 160 123
+            C 167 111 165 97 153 90
+            C 141 83 126 87 120 100
+            Z
+          "
+          fill="#FFFFFF"
+        />
       </svg>
 
       {showText && (

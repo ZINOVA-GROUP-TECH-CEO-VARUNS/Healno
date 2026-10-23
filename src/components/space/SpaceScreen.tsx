@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { ActivityEntry } from '../../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { ActivityEntry, WellnessSession, WellnessActivityType } from '../../types';
 import { storageService } from '../../services/storage';
+import { dbService } from '../../services/db';
 import {
   Compass,
   Plus,
@@ -23,6 +24,14 @@ import {
   Target,
   BarChart3,
   Check,
+  Wind,
+  Flame,
+  Clock,
+  ChevronRight,
+  History,
+  X,
+  Volume2,
+  Sliders,
 } from 'lucide-react';
 import { EmptyStateIllustration } from '../common/CodeIllustrations';
 
@@ -31,16 +40,58 @@ interface SpaceScreenProps {
   remainingSpoons?: number;
 }
 
+type StudioTab = 'rest' | 'breathing' | 'activities' | 'history';
+
+interface BreathPattern {
+  name: string;
+  inhale: number;
+  holdIn: number;
+  exhale: number;
+  holdOut: number;
+  description: string;
+}
+
+const BREATH_PATTERNS: BreathPattern[] = [
+  {
+    name: '4-4-4-4 Box Breathing',
+    inhale: 4,
+    holdIn: 4,
+    exhale: 4,
+    holdOut: 4,
+    description: 'Regulates autonomic nervous system, lowers cortisol, and calms racing heart.',
+  },
+  {
+    name: '4-7-8 Deep Relaxation Breath',
+    inhale: 4,
+    holdIn: 7,
+    exhale: 8,
+    holdOut: 0,
+    description: 'Natural tranquilizer for the nervous system, eases anxiety and promotes sleep.',
+  },
+  {
+    name: '5-5 Coherent Heart Rate Pacing',
+    inhale: 5,
+    holdIn: 0,
+    exhale: 5,
+    holdOut: 0,
+    description: 'Optimizes heart rate variability (HRV) and restores vagal tone.',
+  },
+];
+
 export const SpaceScreen: React.FC<SpaceScreenProps> = ({
   onActivityLogged,
+  remainingSpoons = 12,
 }) => {
+  const [activeTab, setActiveTab] = useState<StudioTab>('rest');
+
+  // Activities & habit state
   const [activities, setActivities] = useState<ActivityEntry[]>(() => storageService.getActivities());
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [viewTab, setViewTab] = useState<'active' | 'archived'>('active');
   const [showLogModal, setShowLogModal] = useState(false);
   const [editingActivity, setEditingActivity] = useState<ActivityEntry | null>(null);
 
-  // Form states
+  // Form states for custom activities
   const [activityCategory, setActivityCategory] = useState<ActivityEntry['category']>('personal_care');
   const [activityName, setActivityName] = useState('');
   const [durationMinutes, setDurationMinutes] = useState(15);
@@ -51,12 +102,36 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
   const [time, setTime] = useState(() => new Date().toTimeString().slice(0, 5));
   const [notes, setNotes] = useState('');
 
-  // Rest Timer State
-  const [timerDuration, setTimerDuration] = useState(10 * 60); // 10 minutes in seconds
-  const [timeLeft, setTimeLeft] = useState(10 * 60);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [selectedTimerPreset, setSelectedTimerPreset] = useState(10);
+  // 1. Sensory Rest Timer State (Includes 5m, 10m, 15m, 30m, and custom!)
+  const [restPreset, setRestPreset] = useState<number>(10);
+  const [customRestMinutes, setCustomRestMinutes] = useState<string>('30');
+  const [isCustomMode, setIsCustomMode] = useState<boolean>(false);
+  const [timerDuration, setTimerDuration] = useState<number>(10 * 60);
+  const [timeLeft, setTimeLeft] = useState<number>(10 * 60);
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
+  // 2. Guided Breathing State
+  const [selectedBreathPattern, setSelectedBreathPattern] = useState<BreathPattern>(BREATH_PATTERNS[0]);
+  const [breathPhase, setBreathPhase] = useState<'Inhale' | 'Hold' | 'Exhale' | 'Rest'>('Inhale');
+  const [phaseSecondsLeft, setPhaseSecondsLeft] = useState<number>(4);
+  const [isBreathingActive, setIsBreathingActive] = useState<boolean>(false);
+  const [breathingElapsedSeconds, setBreathingElapsedSeconds] = useState<number>(0);
+  const [breathingTargetMinutes, setBreathingTargetMinutes] = useState<number>(5);
+
+  // 3. Wellness History State
+  const [wellnessSessions, setWellnessSessions] = useState<WellnessSession[]>([]);
+  const [sessionSaveNotice, setSessionSaveNotice] = useState<string>('');
+
+  // Load history on mount
+  useEffect(() => {
+    async function loadSessions() {
+      const records = await dbService.getWellnessSessions();
+      setWellnessSessions(records);
+    }
+    loadSessions();
+  }, []);
+
+  // Timer Countdown Effect for Sensory Rest
   useEffect(() => {
     let interval: any = null;
     if (isTimerRunning && timeLeft > 0) {
@@ -65,44 +140,111 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
       }, 1000);
     } else if (timeLeft === 0 && isTimerRunning) {
       setIsTimerRunning(false);
+      handleSaveCompletedWellnessSession(
+        'sensory_rest',
+        `Sensory Rest Pause (${Math.round(timerDuration / 60)}m)`,
+        Math.round(timerDuration / 60),
+        1
+      );
     }
     return () => clearInterval(interval);
-  }, [isTimerRunning, timeLeft]);
+  }, [isTimerRunning, timeLeft, timerDuration]);
 
-  const handleStartPause = () => {
+  // Breathing Engine Effect
+  useEffect(() => {
+    let breathInterval: any = null;
+    if (isBreathingActive) {
+      breathInterval = setInterval(() => {
+        setBreathingElapsedSeconds((sec) => sec + 1);
+
+        setPhaseSecondsLeft((prev) => {
+          if (prev > 1) return prev - 1;
+
+          // Transition to next breathing phase
+          const pat = selectedBreathPattern;
+          if (breathPhase === 'Inhale') {
+            if (pat.holdIn > 0) {
+              setBreathPhase('Hold');
+              return pat.holdIn;
+            } else {
+              setBreathPhase('Exhale');
+              return pat.exhale;
+            }
+          } else if (breathPhase === 'Hold') {
+            setBreathPhase('Exhale');
+            return pat.exhale;
+          } else if (breathPhase === 'Exhale') {
+            if (pat.holdOut > 0) {
+              setBreathPhase('Rest');
+              return pat.holdOut;
+            } else {
+              setBreathPhase('Inhale');
+              return pat.inhale;
+            }
+          } else {
+            setBreathPhase('Inhale');
+            return pat.inhale;
+          }
+        });
+      }, 1000);
+    }
+    return () => clearInterval(breathInterval);
+  }, [isBreathingActive, breathPhase, selectedBreathPattern]);
+
+  // Rest Timer Controls
+  const handleStartPauseRest = () => {
     setIsTimerRunning(!isTimerRunning);
   };
 
-  const handleResetTimer = (presetMinutes: number = selectedTimerPreset) => {
+  const handleResetRestTimer = (mins: number) => {
     setIsTimerRunning(false);
-    setSelectedTimerPreset(presetMinutes);
-    setTimerDuration(presetMinutes * 60);
-    setTimeLeft(presetMinutes * 60);
+    setRestPreset(mins);
+    setTimerDuration(mins * 60);
+    setTimeLeft(mins * 60);
   };
 
-  const handleLogRestSession = () => {
-    const elapsedMinutes = Math.max(1, Math.round((timerDuration - timeLeft) / 60));
-    const newEntry: ActivityEntry = {
-      id: `act_${Date.now()}`,
-      category: 'personal_care',
-      activityName: `Sensory Rest Pause (${elapsedMinutes}m)`,
+  const handleApplyCustomRest = () => {
+    const parsed = parseInt(customRestMinutes, 10);
+    if (!isNaN(parsed) && parsed > 0 && parsed <= 120) {
+      handleResetRestTimer(parsed);
+      setIsCustomMode(false);
+    }
+  };
+
+  // Save session to Supabase & local storage
+  const handleSaveCompletedWellnessSession = async (
+    type: WellnessActivityType,
+    title: string,
+    durationMinutes: number,
+    spoonsRecovered: number = 1,
+    pattern?: string
+  ) => {
+    const session: WellnessSession = {
+      id: `well_${Date.now()}`,
+      activityType: type,
+      title,
+      durationMinutes,
+      completedAt: new Date().toISOString(),
       date: new Date().toISOString().split('T')[0],
       time: new Date().toTimeString().slice(0, 5),
-      durationMinutes: elapsedMinutes,
-      quantity: elapsedMinutes,
-      unit: 'mins',
-      target: selectedTimerPreset,
-      completed: true,
-      archived: false,
-      notes: 'Completed calming sensory rest session to recover biological energy.',
-      createdAt: new Date().toISOString(),
+      spoonsRecovered,
+      pattern,
+      notes: `Completed ${durationMinutes}m restorative session. Restored energy reserve.`,
     };
-    storageService.addActivity(newEntry);
-    setActivities(storageService.getActivities());
-    handleResetTimer(selectedTimerPreset);
+
+    await dbService.saveWellnessSession(session);
+    setWellnessSessions(await dbService.getWellnessSessions());
+    setSessionSaveNotice(`Restorative session saved! (+${spoonsRecovered} Spoon recovered)`);
+    setTimeout(() => setSessionSaveNotice(''), 4000);
     if (onActivityLogged) onActivityLogged();
   };
 
+  const handleDeleteSession = async (id: string) => {
+    await dbService.deleteWellnessSession(id);
+    setWellnessSessions(await dbService.getWellnessSessions());
+  };
+
+  // Activity modal helpers
   const openCreateModal = () => {
     setEditingActivity(null);
     setActivityCategory('personal_care');
@@ -117,17 +259,17 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
     setShowLogModal(true);
   };
 
-  const openEditModal = (act: ActivityEntry) => {
-    setEditingActivity(act);
-    setActivityCategory(act.category);
-    setActivityName(act.activityName);
-    setDurationMinutes(act.durationMinutes || 15);
-    setQuantity(act.quantity !== undefined ? act.quantity : '');
-    setUnit(act.unit || 'mins');
-    setTarget(act.target !== undefined ? act.target : '');
-    setDate(act.date);
-    setTime(act.time || new Date().toTimeString().slice(0, 5));
-    setNotes(act.notes || '');
+  const openEditModal = (activity: ActivityEntry) => {
+    setEditingActivity(activity);
+    setActivityCategory(activity.category);
+    setActivityName(activity.activityName);
+    setDurationMinutes(activity.durationMinutes || 15);
+    setQuantity(activity.quantity !== undefined ? activity.quantity : '');
+    setUnit(activity.unit || 'mins');
+    setTarget(activity.target !== undefined ? activity.target : '');
+    setDate(activity.date);
+    setTime(activity.time || new Date().toTimeString().slice(0, 5));
+    setNotes(activity.notes || '');
     setShowLogModal(true);
   };
 
@@ -135,22 +277,17 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
     e.preventDefault();
     if (!activityName.trim()) return;
 
-    const numQty = quantity === '' ? undefined : Number(quantity);
-    const numTarget = target === '' ? undefined : Number(target);
-    const isCompleted = numTarget !== undefined && numQty !== undefined ? numQty >= numTarget : editingActivity?.completed || false;
-
     if (editingActivity) {
       const updated: ActivityEntry = {
         ...editingActivity,
-        category: activityCategory,
         activityName: activityName.trim(),
+        category: activityCategory,
+        durationMinutes: Number(durationMinutes) || 15,
+        quantity: quantity === '' ? undefined : Number(quantity),
+        unit: unit.trim() || 'mins',
+        target: target === '' ? undefined : Number(target),
         date,
         time,
-        durationMinutes: Number(durationMinutes) || 15,
-        quantity: numQty,
-        unit: unit.trim() || 'mins',
-        target: numTarget,
-        completed: isCompleted,
         notes: notes.trim(),
         updatedAt: new Date().toISOString(),
       };
@@ -163,10 +300,10 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
         date,
         time,
         durationMinutes: Number(durationMinutes) || 15,
-        quantity: numQty,
+        quantity: quantity === '' ? undefined : Number(quantity),
         unit: unit.trim() || 'mins',
-        target: numTarget,
-        completed: isCompleted,
+        target: target === '' ? undefined : Number(target),
+        completed: false,
         archived: false,
         notes: notes.trim(),
         createdAt: new Date().toISOString(),
@@ -176,7 +313,6 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
 
     setActivities(storageService.getActivities());
     setShowLogModal(false);
-    setEditingActivity(null);
     if (onActivityLogged) onActivityLogged();
   };
 
@@ -196,527 +332,619 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
     setActivities(storageService.getActivities());
   };
 
-  const categories: { id: ActivityEntry['category']; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  const categories = [
+    { id: 'all', label: 'All Activities', icon: Compass },
     { id: 'personal_care', label: 'Personal Care', icon: Heart },
-    { id: 'household', label: 'Household Cleaning', icon: HomeIcon },
-    { id: 'groceries', label: 'Groceries & Errands', icon: ShoppingBag },
-    { id: 'food_prep', label: 'Food & Meal Prep', icon: Coffee },
-    { id: 'work_study', label: 'Work / Study', icon: BookOpen },
-    { id: 'movement', label: 'Movement & Recreation', icon: Footprints },
-    { id: 'custom', label: 'Custom Activity', icon: Sparkles },
+    { id: 'household', label: 'Household', icon: HomeIcon },
+    { id: 'groceries', label: 'Errands', icon: ShoppingBag },
+    { id: 'food_prep', label: 'Food Prep', icon: Coffee },
+    { id: 'work_study', label: 'Work/Study', icon: BookOpen },
+    { id: 'movement', label: 'Gentle Movement', icon: Footprints },
+    { id: 'custom', label: 'Custom', icon: Sparkles },
   ];
 
   const activeActivities = activities.filter((a) => !a.archived);
   const archivedActivities = activities.filter((a) => a.archived);
-
   const displayedActivities = (viewTab === 'active' ? activeActivities : archivedActivities).filter((a) => {
     if (selectedCategory === 'all') return true;
     return a.category === selectedCategory;
   });
 
-  const timerProgress = timerDuration > 0 ? ((timerDuration - timeLeft) / timerDuration) * 100 : 0;
+  // Time format helpers
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
-  const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  const formattedRestTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  const timerProgress = timerDuration > 0 ? ((timerDuration - timeLeft) / timerDuration) * 100 : 0;
 
   return (
-    <div className="pb-28 pt-2 px-4 max-w-xl mx-auto space-y-5 animate-in fade-in duration-300">
-      {/* Header */}
-      <div className="flex items-center justify-between py-2">
+    <div className="pb-28 pt-2 px-3 sm:px-4 max-w-xl mx-auto space-y-4 animate-in fade-in duration-300">
+      {/* Top Header */}
+      <div className="flex items-center justify-between py-1">
         <div>
-          <h2 className="text-xl font-bold text-[#132A1F] font-display flex items-center gap-2">
+          <h2 className="text-xl sm:text-2xl font-bold text-[#132A1F] font-display flex items-center gap-2">
             <Compass className="w-5 h-5 text-[#FF7A24]" />
-            <span>Activities & Pacing Space</span>
+            <span>Wellness & Pacing Studio</span>
           </h2>
           <p className="text-xs text-[#132A1F]/60">
-            Customize activities, set targets, and balance your physical energy
+            Sensory rest pauses, somatic breathing, habit pacing, and recovery logs
           </p>
         </div>
-
-        <button
-          onClick={openCreateModal}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span>New Activity</span>
-        </button>
       </div>
 
-      {/* Rest & Pacing Tool Card */}
-      <div className="bg-white rounded-3xl p-5 border border-[#132A1F]/10 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-[#FFF4EB] border border-[#FFE0C8] flex items-center justify-center text-[#FF7A24]">
-              <Coffee className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-[#132A1F] font-display">Sensory Rest & Pacing Pause</h3>
-              <p className="text-[11px] text-[#132A1F]/60">Close your eyes, dim lights, and recharge without screens</p>
-            </div>
+      {/* Save Notification */}
+      {sessionSaveNotice && (
+        <div className="bg-[#2D6A4F] text-white px-4 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-between shadow-md animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+            <span>{sessionSaveNotice}</span>
           </div>
-
-          <div className="flex items-center gap-1">
-            {[5, 10, 15, 20].map((mins) => (
-              <button
-                key={mins}
-                onClick={() => handleResetTimer(mins)}
-                className={`text-[10px] px-2.5 py-1 rounded-full font-bold transition-all ${
-                  selectedTimerPreset === mins && !isTimerRunning
-                    ? 'bg-[#FF7A24] text-white shadow-xs'
-                    : 'bg-[#F8F6F0] text-[#132A1F]/70 hover:bg-[#E8EFE9]'
-                }`}
-              >
-                {mins}m
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Circular Timer Visual Display */}
-        <div className="flex flex-col items-center justify-center py-2">
-          <div className="relative w-36 h-36 flex items-center justify-center">
-            {/* SVG Progress Ring */}
-            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-              <circle
-                cx="50"
-                cy="50"
-                r="42"
-                stroke="#F1EFE9"
-                strokeWidth="7"
-                fill="none"
-              />
-              <circle
-                cx="50"
-                cy="50"
-                r="42"
-                stroke="#FF7A24"
-                strokeWidth="7"
-                strokeDasharray="264"
-                strokeDashoffset={264 - (264 * timerProgress) / 100}
-                strokeLinecap="round"
-                fill="none"
-                className="transition-all duration-500"
-              />
-            </svg>
-
-            {/* Time inside circle */}
-            <div className="absolute text-center flex flex-col items-center">
-              <span className="text-2xl font-black font-display text-[#132A1F] tabular-nums tracking-tight">
-                {formattedTime}
-              </span>
-              <span className="text-[10px] font-semibold text-[#132A1F]/50 uppercase tracking-wider">
-                {isTimerRunning ? 'Resting...' : timeLeft === 0 ? 'Completed' : 'Pause Ready'}
-              </span>
-            </div>
-          </div>
-
-          {/* Timer Controls */}
-          <div className="flex items-center gap-2.5 mt-3">
-            <button
-              onClick={handleStartPause}
-              className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold text-white shadow-md transition-all active:scale-95 ${
-                isTimerRunning ? 'bg-[#6B4435] hover:bg-[#573527]' : 'bg-[#FF7A24] hover:bg-[#E06516] shadow-[#FF7A24]/30'
-              }`}
-            >
-              {isTimerRunning ? (
-                <>
-                  <Pause className="w-3.5 h-3.5 fill-white" />
-                  <span>Pause</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5 fill-white" />
-                  <span>{timeLeft < timerDuration ? 'Resume Rest' : 'Begin Rest'}</span>
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={() => handleResetTimer(selectedTimerPreset)}
-              className="p-2 rounded-full bg-[#F8F6F0] hover:bg-[#E8EFE9] text-[#132A1F]/70 transition-colors"
-              title="Reset Timer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-
-            {timeLeft < timerDuration && (
-              <button
-                onClick={handleLogRestSession}
-                className="text-xs bg-[#E8EFE9] hover:bg-[#d8e3da] text-[#132A1F] font-bold px-3 py-1.5 rounded-full transition-colors"
-              >
-                Save Rest Log
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* View Tabs: Active vs Archived */}
-      <div className="flex items-center justify-between border-b border-[#132A1F]/10 pb-2">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setViewTab('active')}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
-              viewTab === 'active'
-                ? 'bg-[#132A1F] text-white shadow-xs'
-                : 'bg-white text-[#132A1F]/70 border border-[#132A1F]/10 hover:bg-[#F8F6F0]'
-            }`}
-          >
-            Active Activities ({activeActivities.length})
-          </button>
-          <button
-            onClick={() => setViewTab('archived')}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all ${
-              viewTab === 'archived'
-                ? 'bg-[#132A1F] text-white shadow-xs'
-                : 'bg-white text-[#132A1F]/70 border border-[#132A1F]/10 hover:bg-[#F8F6F0]'
-            }`}
-          >
-            <Archive className="w-3.5 h-3.5" />
-            <span>Archived ({archivedActivities.length})</span>
+          <button onClick={() => setSessionSaveNotice('')} className="p-1 hover:bg-white/10 rounded-full">
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
+      )}
 
-        <span className="text-[11px] text-[#132A1F]/50 font-medium">
-          {displayedActivities.length} items
-        </span>
-      </div>
-
-      {/* Category Filter Bar */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
-        <button
-          onClick={() => setSelectedCategory('all')}
-          className={`whitespace-nowrap px-3 py-1 rounded-full text-[11px] font-semibold transition-all ${
-            selectedCategory === 'all'
-              ? 'bg-[#FF7A24] text-white shadow-xs'
-              : 'bg-white text-[#132A1F]/70 border border-[#132A1F]/10 hover:bg-[#F8F6F0]'
-          }`}
-        >
-          All
-        </button>
-        {categories.map((cat) => {
-          const Icon = cat.icon;
-          const isSelected = selectedCategory === cat.id;
+      {/* Main Studio Navigation Tabs */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        {[
+          { id: 'rest' as const, label: 'Sensory Rest', icon: Coffee },
+          { id: 'breathing' as const, label: 'Guided Breathing', icon: Wind },
+          { id: 'activities' as const, label: 'Activities & Habits', icon: Target },
+          { id: 'history' as const, label: `History (${wellnessSessions.length})`, icon: History },
+        ].map(({ id, label, icon: Icon }) => {
+          const isActive = activeTab === id;
           return (
             <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 transition-all ${
-                isSelected
-                  ? 'bg-[#FF7A24] text-white shadow-xs'
-                  : 'bg-white text-[#132A1F]/70 border border-[#132A1F]/10 hover:bg-[#F8F6F0]'
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${
+                isActive
+                  ? 'bg-[#132A1F] text-white border-[#132A1F] shadow-xs'
+                  : 'bg-white hover:bg-[#F8F6F0] text-[#132A1F]/70 border-[#132A1F]/10'
               }`}
             >
-              <Icon className="w-3 h-3" />
-              <span>{cat.label}</span>
+              <Icon className="w-3.5 h-3.5" />
+              <span>{label}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Activities Feed */}
-      {displayedActivities.length === 0 ? (
-        <div className="bg-white rounded-3xl p-8 border border-[#132A1F]/10 text-center space-y-3">
-          <EmptyStateIllustration type="tasks" />
-          <h4 className="text-sm font-bold text-[#132A1F] font-display">
-            {viewTab === 'active' ? 'No active activities found' : 'No archived activities'}
-          </h4>
-          <p className="text-xs text-[#132A1F]/60 max-w-sm mx-auto leading-relaxed">
-            {viewTab === 'active'
-              ? 'Customize activities with quantity goals, numerical targets, and completion tracking.'
-              : 'Activities you mark as archived will appear here for long-term health record review.'}
-          </p>
-          {viewTab === 'active' && (
-            <button
-              onClick={openCreateModal}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/20 transition-all font-display"
-            >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>Create an Activity</span>
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {displayedActivities.map((act) => {
-            const catMeta = categories.find((c) => c.id === act.category) || categories[0];
-            const Icon = catMeta.icon;
+      {/* ================= TAB 1: SENSORY REST & PACING PAUSE (5m, 10m, 15m, 30m, custom) ================= */}
+      {activeTab === 'rest' && (
+        <div className="bg-white rounded-3xl p-5 border border-[#132A1F]/10 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-2xl bg-[#FFF4EB] border border-[#FFE0C8] flex items-center justify-center text-[#FF7A24]">
+                <Coffee className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[#132A1F] font-display">Sensory Rest & Pacing Pause</h3>
+                <p className="text-[11px] text-[#132A1F]/60">Dim lights, close eyes, and recharge biological energy</p>
+              </div>
+            </div>
 
-            const hasTarget = act.target !== undefined && act.target > 0;
-            const currentQty = act.quantity || 0;
-            const progressPercent = hasTarget ? Math.min(100, Math.round((currentQty / (act.target || 1)) * 100)) : 0;
+            {/* Presets: 5m, 10m, 15m, 30m, and Custom */}
+            <div className="flex items-center gap-1 flex-wrap">
+              {[5, 10, 15, 30].map((mins) => (
+                <button
+                  key={mins}
+                  onClick={() => {
+                    setIsCustomMode(false);
+                    handleResetRestTimer(mins);
+                  }}
+                  className={`text-[10px] px-2.5 py-1 rounded-full font-bold transition-all ${
+                    restPreset === mins && !isCustomMode && !isTimerRunning
+                      ? 'bg-[#FF7A24] text-white shadow-xs'
+                      : 'bg-[#F8F6F0] text-[#132A1F]/70 hover:bg-[#E8EFE9]'
+                  }`}
+                >
+                  {mins}m
+                </button>
+              ))}
 
-            return (
-              <div
-                key={act.id}
-                className={`bg-white rounded-2xl p-4 border transition-all shadow-xs ${
-                  act.completed ? 'border-emerald-200 bg-emerald-50/20' : 'border-[#132A1F]/10 hover:border-[#FF7A24]/30'
+              <button
+                onClick={() => setIsCustomMode(!isCustomMode)}
+                className={`text-[10px] px-2.5 py-1 rounded-full font-bold transition-all border ${
+                  isCustomMode
+                    ? 'bg-[#2D6A4F] text-white border-[#2D6A4F]'
+                    : 'bg-[#F8F6F0] text-[#132A1F]/70 border-[#132A1F]/10'
                 }`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    {/* Completion Checkbox Button */}
-                    <button
-                      onClick={() => handleToggleComplete(act.id)}
-                      className={`mt-0.5 w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                        act.completed
-                          ? 'bg-emerald-600 text-white'
-                          : 'border-2 border-[#132A1F]/30 hover:border-[#FF7A24] text-transparent'
-                      }`}
-                      title={act.completed ? 'Mark incomplete' : 'Mark completed'}
-                    >
-                      <Check className="w-3.5 h-3.5 stroke-[3]" />
-                    </button>
+                Custom...
+              </button>
+            </div>
+          </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className={`text-xs font-bold ${act.completed ? 'line-through text-[#132A1F]/60' : 'text-[#132A1F]'}`}>
-                          {act.activityName}
-                        </h4>
-                        <span className="text-[10px] bg-[#E8EFE9] text-[#132A1F] px-2 py-0.5 rounded-full font-semibold">
-                          {act.durationMinutes || 15}m
-                        </span>
-                        {hasTarget && (
-                          <span className="text-[10px] bg-[#FFF4EB] text-[#FF7A24] border border-[#FFE0C8] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                            <Target className="w-2.5 h-2.5" />
-                            <span>
-                              {currentQty} / {act.target} {act.unit || 'units'}
-                            </span>
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2 text-[10px] text-[#132A1F]/50 mt-1">
-                        <span>{act.date}</span>
-                        {act.time && <span>· {act.time}</span>}
-                        <span>· {catMeta.label}</span>
-                      </div>
-
-                      {hasTarget && (
-                        <div className="mt-2.5 w-full bg-[#F1EFE9] rounded-full h-1.5 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-300 ${
-                              progressPercent >= 100 ? 'bg-emerald-500' : 'bg-[#FF7A24]'
-                            }`}
-                            style={{ width: `${progressPercent}%` }}
-                          />
-                        </div>
-                      )}
-
-                      {act.notes && (
-                        <p className="text-[11px] text-[#132A1F]/70 mt-1.5 line-clamp-2 italic">
-                          "{act.notes}"
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => openEditModal(act)}
-                      className="w-7 h-7 rounded-full bg-[#F8F6F0] hover:bg-[#FFE0C8] text-[#132A1F]/60 hover:text-[#FF7A24] flex items-center justify-center transition-colors"
-                      title="Edit activity"
-                    >
-                      <Edit2 className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={() => handleToggleArchive(act.id)}
-                      className="w-7 h-7 rounded-full bg-[#F8F6F0] hover:bg-[#E8EFE9] text-[#132A1F]/60 hover:text-[#132A1F] flex items-center justify-center transition-colors"
-                      title={act.archived ? 'Restore to Active' : 'Archive activity'}
-                    >
-                      {act.archived ? <ArchiveRestore className="w-3 h-3" /> : <Archive className="w-3 h-3" />}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteActivity(act.id)}
-                      className="w-7 h-7 rounded-full bg-[#F8F6F0] hover:bg-red-50 text-[#132A1F]/40 hover:text-red-500 flex items-center justify-center transition-colors"
-                      title="Delete activity"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
+          {/* Custom Duration Input Drawer */}
+          {isCustomMode && (
+            <div className="bg-[#FAF8F5] p-3 rounded-2xl border border-[#132A1F]/10 flex items-center justify-between gap-3 text-xs animate-fadeIn">
+              <span className="font-semibold text-[#132A1F]">Set Custom Pause Duration:</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={120}
+                  value={customRestMinutes}
+                  onChange={(e) => setCustomRestMinutes(e.target.value)}
+                  className="w-16 px-2.5 py-1 text-center bg-white border border-[#132A1F]/20 rounded-xl font-bold"
+                />
+                <span className="text-gray-500 font-medium">mins</span>
+                <button
+                  onClick={handleApplyCustomRest}
+                  className="px-3 py-1 bg-[#2D6A4F] text-white font-bold rounded-xl"
+                >
+                  Apply
+                </button>
               </div>
-            );
-          })}
+            </div>
+          )}
+
+          {/* Circular Timer Visual Display */}
+          <div className="flex flex-col items-center justify-center py-4">
+            <div className="relative w-44 h-44 flex items-center justify-center">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="42" stroke="#F1EFE9" strokeWidth="6" fill="none" />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="42"
+                  stroke="#FF7A24"
+                  strokeWidth="6"
+                  strokeDasharray="264"
+                  strokeDashoffset={264 - (264 * timerProgress) / 100}
+                  strokeLinecap="round"
+                  fill="none"
+                  className="transition-all duration-500"
+                />
+              </svg>
+
+              <div className="absolute text-center flex flex-col items-center">
+                <span className="text-3xl font-black font-display text-[#132A1F] tabular-nums tracking-tight">
+                  {formattedRestTime}
+                </span>
+                <span className="text-[10px] font-semibold text-[#132A1F]/50 uppercase tracking-wider mt-0.5">
+                  {isTimerRunning ? 'Resting Peacefully...' : timeLeft === 0 ? 'Pause Complete' : 'Ready to Pause'}
+                </span>
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center gap-2.5 mt-4">
+              <button
+                onClick={handleStartPauseRest}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-bold text-white shadow-md transition-all active:scale-95 ${
+                  isTimerRunning ? 'bg-[#6B4435] hover:bg-[#573527]' : 'bg-[#FF7A24] hover:bg-[#E06516] shadow-[#FF7A24]/30'
+                }`}
+              >
+                {isTimerRunning ? (
+                  <>
+                    <Pause className="w-4 h-4 fill-white" />
+                    <span>Pause Rest</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-white" />
+                    <span>{timeLeft < timerDuration ? 'Resume Rest' : 'Begin Rest'}</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => handleResetRestTimer(restPreset)}
+                className="p-2.5 rounded-full bg-[#F8F6F0] hover:bg-[#E8EFE9] text-[#132A1F]/70 transition-colors"
+                title="Reset Timer"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+
+              {timeLeft < timerDuration && (
+                <button
+                  onClick={() => {
+                    const elapsed = Math.max(1, Math.round((timerDuration - timeLeft) / 60));
+                    handleSaveCompletedWellnessSession('sensory_rest', `Sensory Rest Pause (${elapsed}m)`, elapsed, 1);
+                    handleResetRestTimer(restPreset);
+                  }}
+                  className="text-xs bg-[#E8EFE9] hover:bg-[#d8e3da] text-[#2D6A4F] font-bold px-3.5 py-2 rounded-full transition-colors"
+                >
+                  Save & Recover Spoon
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Log / Edit Activity Modal */}
-      {showLogModal && (
-        <div className="fixed inset-0 z-50 bg-[#132A1F]/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#FAF8F5] w-full max-w-md rounded-3xl p-6 shadow-2xl border border-[#132A1F]/10 space-y-4 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-2 border-b border-[#132A1F]/10">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-[#FFF4EB] flex items-center justify-center text-[#FF7A24]">
-                  <Compass className="w-4 h-4" />
-                </div>
-                <h3 className="text-base font-bold text-[#132A1F] font-display">
-                  {editingActivity ? 'Edit Activity' : 'Create & Log Activity'}
-                </h3>
+      {/* ================= TAB 2: GUIDED BREATHING ================= */}
+      {activeTab === 'breathing' && (
+        <div className="bg-white rounded-3xl p-5 border border-[#132A1F]/10 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-2xl bg-[#E8EFE9] text-[#2D6A4F] flex items-center justify-center">
+                <Wind className="w-5 h-5" />
               </div>
+              <div>
+                <h3 className="text-sm font-bold text-[#132A1F] font-display">Guided Somatic Breathing</h3>
+                <p className="text-[11px] text-[#132A1F]/60">Soothes sympathetic nerve overdrive and relieves tension</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Pattern selector */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {BREATH_PATTERNS.map((pat) => (
               <button
-                onClick={() => setShowLogModal(false)}
-                className="w-7 h-7 rounded-full bg-[#E8EFE9] flex items-center justify-center text-[#132A1F]/70 hover:bg-[#d8e3da]"
+                key={pat.name}
+                onClick={() => {
+                  setSelectedBreathPattern(pat);
+                  setBreathPhase('Inhale');
+                  setPhaseSecondsLeft(pat.inhale);
+                  setIsBreathingActive(false);
+                }}
+                className={`p-3 rounded-2xl text-left border transition-all ${
+                  selectedBreathPattern.name === pat.name
+                    ? 'bg-[#E8EFE9] border-[#2D6A4F] text-[#132A1F]'
+                    : 'bg-[#FAF8F5] border-transparent hover:border-[#132A1F]/10 text-[#132A1F]/80'
+                }`}
               >
-                ✕
+                <div className="text-xs font-bold">{pat.name}</div>
+                <div className="text-[10px] text-[#132A1F]/60 mt-0.5 leading-snug">{pat.description}</div>
+              </button>
+            ))}
+          </div>
+
+          {/* Visual Breathing Bubble */}
+          <div className="flex flex-col items-center justify-center py-6">
+            <div
+              className={`w-44 h-44 rounded-full flex flex-col items-center justify-center text-center transition-all duration-1000 shadow-lg ${
+                breathPhase === 'Inhale'
+                  ? 'scale-110 bg-gradient-to-br from-[#B7E4C7] to-[#74C69D] text-[#132A1F]'
+                  : breathPhase === 'Hold'
+                  ? 'scale-110 bg-gradient-to-br from-[#FFD166] to-[#F4A261] text-[#132A1F]'
+                  : breathPhase === 'Exhale'
+                  ? 'scale-90 bg-gradient-to-br from-[#A8DADC] to-[#457B9D] text-white'
+                  : 'scale-90 bg-gradient-to-br from-[#E8EFE9] to-[#D8E2DC] text-[#132A1F]'
+              }`}
+            >
+              <span className="text-lg font-extrabold uppercase tracking-wider">{breathPhase}</span>
+              <span className="text-3xl font-black mt-1 tabular-nums">{phaseSecondsLeft}s</span>
+              <span className="text-[10px] opacity-80 mt-1">
+                {breathPhase === 'Inhale'
+                  ? 'Slowly through nose'
+                  : breathPhase === 'Hold'
+                  ? 'Soft & relaxed'
+                  : 'Gently through mouth'}
+              </span>
+            </div>
+
+            {/* Breathing controls */}
+            <div className="flex items-center gap-2.5 mt-5">
+              <button
+                onClick={() => setIsBreathingActive(!isBreathingActive)}
+                className={`px-6 py-2.5 rounded-full text-xs font-bold text-white shadow-md transition-all active:scale-95 flex items-center gap-2 ${
+                  isBreathingActive
+                    ? 'bg-[#6B4435] hover:bg-[#573527]'
+                    : 'bg-[#2D6A4F] hover:bg-[#1B4332] shadow-[#2D6A4F]/30'
+                }`}
+              >
+                {isBreathingActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
+                <span>{isBreathingActive ? 'Pause Breathing' : 'Start Breathing Guide'}</span>
+              </button>
+
+              {breathingElapsedSeconds > 30 && (
+                <button
+                  onClick={() => {
+                    const elapsedMins = Math.max(1, Math.round(breathingElapsedSeconds / 60));
+                    handleSaveCompletedWellnessSession(
+                      'breathing',
+                      `${selectedBreathPattern.name} (${elapsedMins}m)`,
+                      elapsedMins,
+                      1,
+                      selectedBreathPattern.name
+                    );
+                    setBreathingElapsedSeconds(0);
+                    setIsBreathingActive(false);
+                  }}
+                  className="px-4 py-2.5 rounded-full bg-[#E8EFE9] text-[#2D6A4F] text-xs font-bold hover:bg-[#d8e6da]"
+                >
+                  Log Session
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= TAB 3: ACTIVITIES & HABITS TRACKER ================= */}
+      {activeTab === 'activities' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between bg-white p-3.5 rounded-3xl border border-[#132A1F]/10">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setViewTab('active')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  viewTab === 'active' ? 'bg-[#132A1F] text-white shadow-xs' : 'text-[#132A1F]/60'
+                }`}
+              >
+                Active ({activeActivities.length})
+              </button>
+              <button
+                onClick={() => setViewTab('archived')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  viewTab === 'archived' ? 'bg-[#132A1F] text-white shadow-xs' : 'text-[#132A1F]/60'
+                }`}
+              >
+                Archived ({archivedActivities.length})
               </button>
             </div>
 
-            <form onSubmit={handleSaveActivity} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#132A1F] mb-1.5">Category</label>
-                <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto p-1">
-                  {categories.map((cat) => {
-                    const Icon = cat.icon;
-                    const isSelected = activityCategory === cat.id;
-                    return (
-                      <button
-                        type="button"
-                        key={cat.id}
-                        onClick={() => setActivityCategory(cat.id)}
-                        className={`p-2 rounded-xl text-left text-xs font-semibold flex items-center gap-2 border transition-all ${
-                          isSelected
-                            ? 'bg-[#FF7A24] text-white border-[#FF7A24] shadow-xs'
-                            : 'bg-white text-[#132A1F] border-[#132A1F]/10 hover:bg-[#F8F6F0]'
-                        }`}
-                      >
-                        <Icon className="w-4 h-4 shrink-0" />
-                        <span className="truncate">{cat.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+            <button
+              onClick={openCreateModal}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-xs transition-all active:scale-95"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>New Activity</span>
+            </button>
+          </div>
 
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {categories.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedCategory(c.id)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all border ${
+                  selectedCategory === c.id
+                    ? 'bg-[#2D6A4F] text-white border-[#2D6A4F]'
+                    : 'bg-white text-[#132A1F]/70 border-[#132A1F]/10 hover:bg-[#F8F6F0]'
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Activities List */}
+          {displayedActivities.length === 0 ? (
+            <div className="bg-white rounded-3xl p-8 text-center border border-[#132A1F]/10">
+              <EmptyStateIllustration className="w-16 h-16 mx-auto mb-2 text-[#132A1F]/40" />
+              <h4 className="text-sm font-bold text-[#132A1F]">No activities found in this view</h4>
+              <p className="text-xs text-[#132A1F]/60 mt-1 max-w-xs mx-auto">
+                Customize your habits, hydration goals, gentle walks, and household chores with numerical targets.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {displayedActivities.map((act) => (
+                <div
+                  key={act.id}
+                  className={`bg-white rounded-2xl p-3.5 border transition-all flex items-center justify-between gap-3 ${
+                    act.completed ? 'border-emerald-200 bg-emerald-50/20' : 'border-[#132A1F]/10'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => handleToggleComplete(act.id)}
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors border ${
+                        act.completed
+                          ? 'bg-emerald-500 border-emerald-500 text-white'
+                          : 'border-[#132A1F]/30 hover:border-[#132A1F]'
+                      }`}
+                    >
+                      {act.completed && <Check className="w-3.5 h-3.5" />}
+                    </button>
+
+                    <div>
+                      <div className={`text-xs font-bold text-[#132A1F] ${act.completed ? 'line-through opacity-70' : ''}`}>
+                        {act.activityName}
+                      </div>
+                      <div className="text-[10px] text-[#132A1F]/60 mt-0.5 flex items-center gap-2">
+                        {act.quantity !== undefined && (
+                          <span className="font-semibold text-[#2D6A4F]">
+                            Progress: {act.quantity} {act.unit || ''} {act.target ? `/ ${act.target}` : ''}
+                          </span>
+                        )}
+                        <span>{act.date}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => openEditModal(act)}
+                      className="p-1.5 text-gray-400 hover:text-[#132A1F] rounded-lg"
+                      title="Edit"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleToggleArchive(act.id)}
+                      className="p-1.5 text-gray-400 hover:text-amber-600 rounded-lg"
+                      title={act.archived ? 'Restore' : 'Archive'}
+                    >
+                      {act.archived ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteActivity(act.id)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================= TAB 6: WELLNESS HISTORY LOG ================= */}
+      {activeTab === 'history' && (
+        <div className="bg-white rounded-3xl p-5 border border-[#132A1F]/10 shadow-xs space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-[#132A1F]/8">
+            <h3 className="text-sm font-bold text-[#132A1F] flex items-center gap-2">
+              <History className="w-4 h-4 text-[#2D6A4F]" />
+              <span>Wellness Sessions History ({wellnessSessions.length})</span>
+            </h3>
+            <span className="text-[11px] text-[#2D6A4F] font-bold">
+              +{wellnessSessions.reduce((sum, s) => sum + (s.spoonsRecovered || 1), 0)} Spoons Restored
+            </span>
+          </div>
+
+          {wellnessSessions.length === 0 ? (
+            <div className="text-center py-8 space-y-2">
+              <Coffee className="w-10 h-10 text-[#132A1F]/30 mx-auto" />
+              <p className="text-xs text-[#132A1F]/70 font-medium">No wellness sessions recorded yet.</p>
+              <p className="text-[11px] text-[#132A1F]/50 max-w-xs mx-auto">
+                Complete a guided somatic breathing or sensory rest pause above to log your restorative records.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+              {wellnessSessions.map((session) => (
+                <div
+                  key={session.id}
+                  className="bg-[#FAF8F5] rounded-2xl p-3 border border-[#132A1F]/5 flex items-center justify-between gap-3 text-xs"
+                >
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-[#132A1F] flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#2D6A4F]" />
+                      <span>{session.title}</span>
+                    </div>
+                    <div className="text-[10px] text-[#132A1F]/60 flex items-center gap-2">
+                      <span>{session.date} {session.time ? `· ${session.time}` : ''}</span>
+                      <span className="text-[#FF7A24] font-bold">+{session.spoonsRecovered || 1} spoon</span>
+                      <span>{session.durationMinutes} mins</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleDeleteSession(session.id)}
+                    className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
+                    title="Delete record"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Activity Create/Edit Modal */}
+      {showLogModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#FAF8F5] rounded-3xl max-w-md w-full p-5 shadow-2xl border border-[#132A1F]/10 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#132A1F]/10 pb-3">
+              <h3 className="text-base font-bold text-[#132A1F]">
+                {editingActivity ? 'Edit Activity' : 'Add New Activity'}
+              </h3>
+              <button onClick={() => setShowLogModal(false)} className="p-1 text-gray-400 hover:text-gray-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveActivity} className="space-y-3 text-xs">
               <div>
-                <label className="block text-xs font-bold text-[#132A1F] mb-1">
-                  Activity Name *
-                </label>
+                <label className="block font-bold text-[#132A1F] mb-1">Activity Name</label>
                 <input
                   type="text"
-                  required
-                  placeholder="e.g. Walking, Hydration, Gentle Stretching, Laundry"
+                  placeholder="e.g. 15-Minute Forest Stroll"
                   value={activityName}
                   onChange={(e) => setActivityName(e.target.value)}
-                  className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                  className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none"
+                  required
                 />
               </div>
 
-              {/* Quantities & Numerical Targets */}
-              <div className="bg-[#FFF8F2] p-3.5 rounded-2xl border border-[#FFE0C8] space-y-2.5">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-[#132A1F]">
-                  <Target className="w-3.5 h-3.5 text-[#FF7A24]" />
-                  <span>Target & Measurement (Optional)</span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold text-[#132A1F] mb-1">Category</label>
+                  <select
+                    value={activityCategory}
+                    onChange={(e) => setActivityCategory(e.target.value as any)}
+                    className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-2.5 py-2 text-xs font-medium"
+                  >
+                    <option value="personal_care">Personal Care</option>
+                    <option value="household">Household</option>
+                    <option value="groceries">Groceries / Errands</option>
+                    <option value="food_prep">Food Prep</option>
+                    <option value="work_study">Work / Study</option>
+                    <option value="movement">Gentle Movement</option>
+                    <option value="custom">Custom</option>
+                  </select>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-bold text-[#132A1F]/70 mb-1">
-                      Current Qty
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      placeholder="e.g. 3500"
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-[#132A1F]/70 mb-1">
-                      Target Goal
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      placeholder="e.g. 5000"
-                      value={target}
-                      onChange={(e) => setTarget(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-[#132A1F]/70 mb-1">
-                      Unit
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="steps, cups, mins"
-                      value={unit}
-                      onChange={(e) => setUnit(e.target.value)}
-                      className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
-                    />
-                  </div>
+
+                <div>
+                  <label className="block font-bold text-[#132A1F] mb-1">Duration (mins)</label>
+                  <input
+                    type="number"
+                    value={durationMinutes}
+                    onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                    className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs font-medium"
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-[11px] font-bold text-[#132A1F] mb-1">
-                    Duration (mins)
-                  </label>
+                  <label className="block font-bold text-[#132A1F] mb-1">Quantity</label>
                   <input
                     type="number"
-                    min="1"
-                    max="480"
-                    value={durationMinutes}
-                    onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                    placeholder="e.g. 500"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-2 py-2 text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-[#132A1F] mb-1">
-                    Date
-                  </label>
+                  <label className="block font-bold text-[#132A1F] mb-1">Unit</label>
                   <input
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-2.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                    type="text"
+                    placeholder="steps / mins"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-2 py-2 text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-[#132A1F] mb-1">
-                    Time
-                  </label>
+                  <label className="block font-bold text-[#132A1F] mb-1">Target</label>
                   <input
-                    type="time"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                    className="w-full bg-white border border-[#132A1F]/20 rounded-xl px-2.5 py-2 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none"
+                    type="number"
+                    placeholder="e.g. 1000"
+                    value={target}
+                    onChange={(e) => setTarget(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-2 py-2 text-xs"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#132A1F] mb-1">
-                  Notes or Sensations (Optional)
-                </label>
+                <label className="block font-bold text-[#132A1F] mb-1">Pacing Notes</label>
                 <textarea
-                  rows={2}
-                  placeholder="How did you feel during and after? Needed a break?"
+                  placeholder="How did your energy feel during this task?"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full bg-white border border-[#132A1F]/20 rounded-xl p-3 text-xs focus:ring-2 focus:ring-[#FF7A24] outline-none resize-none"
+                  rows={2}
+                  className="w-full bg-white border border-[#132A1F]/15 rounded-xl p-2.5 text-xs focus:outline-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="pt-2 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowLogModal(false)}
-                  className="px-4 py-2 rounded-full text-xs font-semibold text-[#132A1F]/70 hover:bg-[#E8EFE9]"
+                  className="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 font-bold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-full bg-[#FF7A24] hover:bg-[#E06516] text-white text-xs font-bold shadow-md shadow-[#FF7A24]/25 transition-all"
+                  className="px-5 py-2 rounded-xl bg-[#FF7A24] text-white font-bold"
                 >
-                  {editingActivity ? 'Update Activity' : 'Save Activity'}
+                  Save Activity
                 </button>
               </div>
             </form>

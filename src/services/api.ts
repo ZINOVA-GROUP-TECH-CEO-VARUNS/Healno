@@ -1,10 +1,109 @@
 import { AIChatMessage, UserProfile } from '../types';
 
 export const apiService = {
+  streamChatWithCompanion: async (
+    messages: AIChatMessage[],
+    userProfile: UserProfile,
+    healthContext: {
+      recentSymptoms: string[];
+      remainingSpoons: number;
+      documents?: any[];
+      medications?: string[];
+      appointments?: string[];
+      journalNotes?: string[];
+    },
+    onChunk: (fullAccumulatedText: string) => void,
+    signal?: AbortSignal
+  ): Promise<string> => {
+    try {
+      const response = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, userProfile, healthContext }),
+        signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Chat stream responded with ${response.status}`);
+      }
+
+      if (!response.body) {
+        throw new Error('Response body is not readable for stream');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          const payload = trimmed.slice(5).trim();
+          if (payload === '[DONE]') {
+            break;
+          }
+          try {
+            const parsed = JSON.parse(payload);
+            if (parsed.text) {
+              fullText += parsed.text;
+              onChunk(fullText);
+            } else if (parsed.error) {
+              console.warn('Stream chunk error:', parsed.error);
+            }
+          } catch {
+            if (payload) {
+              fullText += payload;
+              onChunk(fullText);
+            }
+          }
+        }
+      }
+
+      if (buffer.trim().startsWith('data:')) {
+        const payload = buffer.trim().slice(5).trim();
+        if (payload && payload !== '[DONE]') {
+          try {
+            const parsed = JSON.parse(payload);
+            if (parsed.text) {
+              fullText += parsed.text;
+              onChunk(fullText);
+            }
+          } catch {}
+        }
+      }
+
+      return fullText;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw err;
+      }
+      console.warn('Streaming failed, falling back to unary chat API', err);
+      const fallbackResult = await apiService.chatWithCompanion(messages, userProfile, healthContext);
+      onChunk(fallbackResult.reply);
+      return fallbackResult.reply;
+    }
+  },
+
   chatWithCompanion: async (
     messages: AIChatMessage[],
     userProfile: UserProfile,
-    healthContext: { recentSymptoms: string[]; remainingSpoons: number }
+    healthContext: {
+      recentSymptoms: string[];
+      remainingSpoons: number;
+      documents?: any[];
+      medications?: string[];
+      appointments?: string[];
+      journalNotes?: string[];
+    }
   ) => {
     try {
       const response = await fetch('/api/chat', {
@@ -17,10 +116,10 @@ export const apiService = {
       }
       return await response.json();
     } catch (err) {
-      console.warn('API error, utilizing supportive fallback companion logic', err);
-      // Gentle offline/fallback response
+      console.warn('API error, utilizing fallback natural assistant logic', err);
+      const lastUserMsg = (messages && messages[messages.length - 1]?.content) || '';
       return {
-        reply: `I hear you, ${userProfile.name}. Taking things one gentle step at a time is the wisest approach right now. How is your energy holding up in this moment? Remember: rest is a form of progress.`,
+        reply: `I hear you and I'm right here with you! Regarding "${lastUserMsg}": I can help with general knowledge, everyday inquiries, science, coding, creative tasks, or your chronic energy pacing. What would you like to explore next?`,
         suggestedAction: null,
       };
     }

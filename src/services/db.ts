@@ -13,6 +13,7 @@ import {
   JournalEntry,
   ActivityEntry,
   DailyMealPlan,
+  WellnessSession,
 } from '../types';
 
 export const dbService = {
@@ -452,15 +453,236 @@ export const dbService = {
     storageService.deleteAppointment(id);
   },
 
-  // Medical Documents
+  // Medical Documents / Reports (PostgreSQL + Supabase Storage)
   getDocuments: async (): Promise<MedicalDocument[]> => {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('medical_reports')
+          .select('*')
+          .order('date', { ascending: false });
+
+        if (data && !error && data.length > 0) {
+          return data.map((d: any) => ({
+            id: d.id,
+            userId: d.user_id,
+            title: d.title,
+            documentType: d.document_type,
+            provider: d.provider,
+            date: d.date,
+            fileName: d.file_name,
+            fileSize: d.file_size,
+            fileUrl: d.file_url,
+            storagePath: d.storage_path,
+            mimeType: d.mime_type,
+            keyFindings: d.key_findings || [],
+            plainLanguageSummary: d.plain_language_summary || '',
+            suggestedDoctorQuestions: d.suggested_doctor_questions || [],
+            unverified: d.unverified ?? false,
+            notes: d.notes,
+            createdAt: d.created_at,
+            updatedAt: d.updated_at,
+          }));
+        }
+      } catch (err) {
+        console.warn('Supabase documents fetch error, falling back to local storage', err);
+      }
+    }
     return storageService.getDocuments();
   },
+
   saveDocument: async (doc: MedicalDocument): Promise<void> => {
     storageService.saveDocument(doc);
+    if (supabase) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('medical_reports').upsert({
+            id: doc.id.startsWith('doc_') ? undefined : doc.id,
+            user_id: user.id,
+            title: doc.title,
+            document_type: doc.documentType,
+            provider: doc.provider,
+            date: doc.date,
+            file_name: doc.fileName,
+            file_size: doc.fileSize,
+            file_url: doc.fileUrl,
+            storage_path: doc.storagePath,
+            mime_type: doc.mimeType,
+            key_findings: doc.keyFindings,
+            plain_language_summary: doc.plainLanguageSummary,
+            suggested_doctor_questions: doc.suggestedDoctorQuestions,
+            unverified: doc.unverified,
+            notes: doc.notes,
+            updated_at: new Date().toISOString(),
+          });
+        }
+      } catch (err) {
+        console.warn('Supabase save document error', err);
+      }
+    }
   },
-  deleteDocument: async (id: string): Promise<void> => {
+
+  deleteDocument: async (id: string, storagePath?: string): Promise<void> => {
     storageService.deleteDocument(id);
+    if (supabase) {
+      try {
+        await supabase.from('medical_reports').delete().eq('id', id);
+        if (storagePath) {
+          await supabase.storage.from('medical_reports').remove([storagePath]);
+        }
+      } catch (err) {
+        console.warn('Supabase delete document error', err);
+      }
+    }
+  },
+
+  // Wellness Sessions (Guided Breathing, Meditation, Mindfulness, Stretching, Rest)
+  getWellnessSessions: async (): Promise<WellnessSession[]> => {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('wellness_sessions')
+          .select('*')
+          .order('completed_at', { ascending: false });
+
+        if (data && !error && data.length > 0) {
+          return data.map((d: any) => ({
+            id: d.id,
+            userId: d.user_id,
+            activityType: d.activity_type,
+            title: d.title,
+            durationMinutes: d.duration_minutes,
+            completedAt: d.completed_at,
+            date: d.date,
+            time: d.time,
+            notes: d.notes,
+            spoonsRecovered: d.spoons_recovered || 1,
+            pattern: d.pattern,
+            createdAt: d.created_at,
+          }));
+        }
+      } catch (err) {
+        console.warn('Supabase wellness fetch error, falling back to local', err);
+      }
+    }
+    return storageService.getWellnessSessions();
+  },
+
+  saveWellnessSession: async (session: WellnessSession): Promise<void> => {
+    storageService.saveWellnessSession(session);
+    if (supabase) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('wellness_sessions').insert({
+            user_id: user.id,
+            activity_type: session.activityType,
+            title: session.title,
+            duration_minutes: session.durationMinutes,
+            completed_at: session.completedAt || new Date().toISOString(),
+            date: session.date,
+            time: session.time,
+            notes: session.notes,
+            spoons_recovered: session.spoonsRecovered,
+            pattern: session.pattern,
+          });
+        }
+      } catch (err) {
+        console.warn('Supabase save wellness error', err);
+      }
+    }
+  },
+
+  deleteWellnessSession: async (id: string): Promise<void> => {
+    storageService.deleteWellnessSession(id);
+    if (supabase) {
+      try {
+        await supabase.from('wellness_sessions').delete().eq('id', id);
+      } catch (err) {
+        console.warn('Supabase delete wellness error', err);
+      }
+    }
+  },
+
+  // Community Posts
+  getCommunityPosts: async (): Promise<CommunityPost[]> => {
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('community_posts')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (data && !error && data.length > 0) {
+          return data.map((d: any) => ({
+            id: d.id,
+            authorName: d.author_name,
+            isAnonymous: false,
+            title: d.title,
+            content: d.content,
+            topic: d.topic,
+            tags: d.tags || [],
+            timeAgo: 'Recently',
+            reactions: d.reactions || { hug: 0, spoon: 0, strength: 0, heart: 0 },
+            commentsCount: d.comments_count || 0,
+            comments: [],
+          }));
+        }
+      } catch (err) {
+        console.warn('Supabase community posts fetch error', err);
+      }
+    }
+    return storageService.getCommunityPosts();
+  },
+
+  saveCommunityPost: async (post: CommunityPost): Promise<void> => {
+    storageService.addCommunityPost(post);
+    if (supabase) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('community_posts').insert({
+            user_id: user.id,
+            author_name: post.authorName,
+            title: post.title,
+            content: post.content,
+            topic: post.topic,
+            tags: post.tags,
+            reactions: post.reactions,
+            comments_count: post.commentsCount,
+          });
+        }
+      } catch (err) {
+        console.warn('Supabase save post error', err);
+      }
+    }
+  },
+
+  deleteCommunityPost: async (postId: string): Promise<void> => {
+    storageService.deleteCommunityPost(postId);
+    if (supabase) {
+      try {
+        await supabase.from('community_posts').delete().eq('id', postId);
+      } catch (err) {
+        console.warn('Supabase delete post error', err);
+      }
+    }
+  },
+
+  clearAllCommunityPosts: async (): Promise<void> => {
+    storageService.clearAllCommunityPosts();
+    if (supabase) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          // Deletes posts created by this authenticated user
+          await supabase.from('community_posts').delete().eq('user_id', user.id);
+        }
+      } catch (err) {
+        console.warn('Supabase clear posts error', err);
+      }
+    }
   },
 
   // Daily Meal Plan

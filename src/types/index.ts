@@ -163,7 +163,11 @@ export interface MedicalDocument {
   unverified: boolean; // Must be unverified until user confirms
   connectedSymptoms?: string[];
   userNotes?: string;
+  notes?: string;
+  storagePath?: string;
+  userId?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Appointment {
@@ -227,10 +231,10 @@ export interface Lesson {
 export interface CommunityPost {
   id: string;
   authorName: string;
-  isAnonymous: boolean;
+  isAnonymous?: boolean;
   authorAvatar?: string;
   timeAgo: string;
-  topic: 'pacing' | 'fatigue' | 'coping' | 'nutrition' | 'work_school' | 'appointments';
+  topic: 'pacing' | 'fatigue' | 'coping' | 'nutrition' | 'work_school' | 'appointments' | string;
   title: string;
   content: string;
   tags: string[];
@@ -303,4 +307,27 @@ export interface AIChatMessage {
     details: string;
     data?: any;
   } | null;
+}
+
+export type WellnessActivityType =
+  | 'breathing'
+  | 'meditation'
+  | 'mindfulness'
+  | 'stretching'
+  | 'relaxation'
+  | 'sensory_rest';
+
+export interface WellnessSession {
+  id: string;
+  userId?: string;
+  activityType: WellnessActivityType;
+  title: string;
+  durationMinutes: number;
+  completedAt: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm
+  notes?: string;
+  spoonsRecovered: number;
+  pattern?: string;
+  createdAt?: string;
 }
