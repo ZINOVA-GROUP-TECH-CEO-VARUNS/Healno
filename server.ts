@@ -44,6 +44,25 @@ ${healthContext?.appointments?.length ? `Upcoming Appointments:\n- ${healthConte
 ${healthContext?.journalNotes?.length ? `Recent Journal Entries:\n- ${healthContext.journalNotes.join('\n- ')}` : ''}`;
 }
 
+function safeJsonParse(text: string) {
+  if (!text) return {};
+  let clean = text.trim();
+  if (clean.startsWith('```')) {
+    clean = clean.replace(/^```[a-z]*\n?/i, '').replace(/```$/, '').trim();
+  }
+  try {
+    return JSON.parse(clean);
+  } catch (e) {
+    const match = clean.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch (inner) {}
+    }
+    return {};
+  }
+}
+
 async function callOpenRouter(messages: any[], systemInstruction?: string, jsonMode = false, signal?: AbortSignal) {
   if (!OPENROUTER_API_KEY) {
     throw new Error('OPENROUTER_API_KEY is not configured. Please set OPENROUTER_API_KEY in environment variables.');
@@ -265,7 +284,7 @@ app.post('/api/analyze-document', async (req, res) => {
     ];
 
     const responseText = await callOpenRouter(messages, 'You are a precise medical document analysis assistant that returns valid JSON.', true);
-    const parsed = JSON.parse(responseText || '{}');
+    const parsed = safeJsonParse(responseText);
 
     res.json({
       documentType: parsed.documentType || 'Medical Record',
@@ -315,7 +334,7 @@ Provide a JSON object containing:
 4. symptomSummary: 2-3 sentences summarizing symptom patterns.`;
 
     const responseText = await callOpenRouter([{ role: 'user', content: prompt }], 'You are a clinical preparation assistant that returns valid JSON.', true);
-    const parsed = JSON.parse(responseText || '{}');
+    const parsed = safeJsonParse(responseText);
     res.json(parsed);
   } catch (error: any) {
     console.error('Error in /api/doctor-prep:', error);
@@ -352,7 +371,7 @@ Format as JSON with:
 recipeName, prepTimeMinutes, energySpoonCost (1 to 3), difficulty ("Low Effort" | "Moderate"), ingredients (array), instructions (array), lowEffortAlternative (string), nutritionNotes (string).`;
 
     const responseText = await callOpenRouter([{ role: 'user', content: prompt }], 'You are a nutritional assistant that returns valid JSON.', true);
-    const parsed = JSON.parse(responseText || '{}');
+    const parsed = safeJsonParse(responseText);
     res.json(parsed);
   } catch (error: any) {
     console.error('Error in /api/recipe-generator:', error);
@@ -393,7 +412,7 @@ Format as JSON:
 }`;
 
     const responseText = await callOpenRouter([{ role: 'user', content: prompt }], 'You are a medical document Q&A assistant that returns valid JSON.', true);
-    const parsed = JSON.parse(responseText || '{}');
+    const parsed = safeJsonParse(responseText);
     res.json(parsed);
   } catch (error: any) {
     console.error('Error in /api/document-qa:', error);
@@ -436,7 +455,7 @@ Return pure JSON with schema:
 }`;
 
     const responseText = await callOpenRouter([{ role: 'user', content: prompt }], 'You are a meal planning assistant that returns valid JSON.', true);
-    const parsed = JSON.parse(responseText || '{}');
+    const parsed = safeJsonParse(responseText);
     res.json(parsed);
   } catch (error: any) {
     console.error('Error in /api/daily-meal-plan:', error);

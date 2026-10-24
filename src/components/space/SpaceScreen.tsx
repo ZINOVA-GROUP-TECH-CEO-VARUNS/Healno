@@ -95,6 +95,7 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
   const [activityCategory, setActivityCategory] = useState<ActivityEntry['category']>('personal_care');
   const [activityName, setActivityName] = useState('');
   const [durationMinutes, setDurationMinutes] = useState(15);
+  const [spoonCost, setSpoonCost] = useState<number>(2);
   const [quantity, setQuantity] = useState<number | ''>('');
   const [unit, setUnit] = useState('mins');
   const [target, setTarget] = useState<number | ''>('');
@@ -250,6 +251,7 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
     setActivityCategory('personal_care');
     setActivityName('');
     setDurationMinutes(15);
+    setSpoonCost(2);
     setQuantity('');
     setUnit('mins');
     setTarget('');
@@ -264,6 +266,7 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
     setActivityCategory(activity.category);
     setActivityName(activity.activityName);
     setDurationMinutes(activity.durationMinutes || 15);
+    setSpoonCost(activity.spoonCost ?? 2);
     setQuantity(activity.quantity !== undefined ? activity.quantity : '');
     setUnit(activity.unit || 'mins');
     setTarget(activity.target !== undefined ? activity.target : '');
@@ -283,6 +286,7 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
         activityName: activityName.trim(),
         category: activityCategory,
         durationMinutes: Number(durationMinutes) || 15,
+        spoonCost: Number(spoonCost) || 2,
         quantity: quantity === '' ? undefined : Number(quantity),
         unit: unit.trim() || 'mins',
         target: target === '' ? undefined : Number(target),
@@ -300,6 +304,7 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
         date,
         time,
         durationMinutes: Number(durationMinutes) || 15,
+        spoonCost: Number(spoonCost) || 2,
         quantity: quantity === '' ? undefined : Number(quantity),
         unit: unit.trim() || 'mins',
         target: target === '' ? undefined : Number(target),
@@ -735,8 +740,13 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
                     </button>
 
                     <div>
-                      <div className={`text-xs font-bold text-[#132A1F] ${act.completed ? 'line-through opacity-70' : ''}`}>
-                        {act.activityName}
+                      <div className="flex items-center gap-2">
+                        <div className={`text-xs font-bold text-[#132A1F] ${act.completed ? 'line-through opacity-70' : ''}`}>
+                          {act.activityName}
+                        </div>
+                        <span className="text-[10px] bg-[#FFF4EB] text-[#FF7A24] px-2 py-0.5 rounded-full font-bold">
+                          {act.spoonCost || 1} Spoons
+                        </span>
                       </div>
                       <div className="text-[10px] text-[#132A1F]/60 mt-0.5 flex items-center gap-2">
                         {act.quantity !== undefined && (
@@ -919,6 +929,21 @@ export const SpaceScreen: React.FC<SpaceScreenProps> = ({
                     className="w-full bg-white border border-[#132A1F]/15 rounded-xl px-2 py-2 text-xs"
                   />
                 </div>
+              </div>
+
+              <div className="bg-[#FAF8F5] p-3 rounded-2xl border border-[#132A1F]/10 space-y-1">
+                <div className="flex justify-between items-center text-xs font-bold text-[#132A1F]">
+                  <span>Spoon Cost (Energy Drain)</span>
+                  <span className="text-[#FF7A24] font-display">{spoonCost} Spoons</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="6"
+                  value={spoonCost}
+                  onChange={(e) => setSpoonCost(Number(e.target.value))}
+                  className="w-full accent-[#FF7A24]"
+                />
               </div>
 
               <div>

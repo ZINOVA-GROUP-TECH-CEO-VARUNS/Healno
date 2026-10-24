@@ -12,6 +12,7 @@ import {
   CommunityPost,
   MealRecipe,
   JournalEntry,
+  ActivityEntry,
 } from './types';
 import { storageService, defaultProfile } from './services/storage';
 import { TopHeader } from './components/layout/TopHeader';
@@ -104,17 +105,23 @@ export default function App() {
     syncBackendData();
   }, []);
 
-  // Dynamic Spoons Calculation
-  // Daily Spoons Capacity - spent spoons from completed non-restorative tasks + recovered spoons
-  const spentSpoons = pacingTasks
-    .filter((t) => t.completed && !t.isRestorative)
+  // Dynamic Spoons Calculation (includes pacing tasks and activities, resetting daily)
+  const todayStr = new Date().toISOString().split('T')[0];
+  const activities = storageService.getActivities();
+
+  const spentSpoonsFromTasks = pacingTasks
+    .filter((t) => t.completed && !t.isRestorative && (!t.date || t.date === todayStr))
     .reduce((sum, t) => sum + t.spoonCost, 0);
 
+  const spentSpoonsFromActivities = activities
+    .filter((a) => a.completed && (!a.date || a.date === todayStr))
+    .reduce((sum, a) => sum + (a.spoonCost || 1), 0);
+
   const recoveredSpoons = pacingTasks
-    .filter((t) => t.completed && t.isRestorative)
+    .filter((t) => t.completed && t.isRestorative && (!t.date || t.date === todayStr))
     .reduce((sum, t) => sum + Math.abs(t.spoonCost), 0);
 
-  const remainingSpoons = profile.dailySpoonsCapacity - spentSpoons + recoveredSpoons;
+  const remainingSpoons = profile.dailySpoonsCapacity - spentSpoonsFromTasks - spentSpoonsFromActivities + recoveredSpoons;
 
   // Handlers
   const handleUpdateProfile = (updated: UserProfile) => {

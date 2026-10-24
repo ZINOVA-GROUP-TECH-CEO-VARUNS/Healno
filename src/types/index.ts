@@ -138,6 +138,7 @@ export interface ActivityEntry {
   date: string;
   time?: string;
   durationMinutes?: number;
+  spoonCost?: number; // e.g. 2 Spoons
   quantity?: number; // Numerical progress/measurement
   unit?: string; // e.g. "steps", "mins", "glasses", "reps", "pages", "hours"
   target?: number; // Target quantity
