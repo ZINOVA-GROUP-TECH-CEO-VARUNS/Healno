@@ -152,11 +152,6 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-[#FF7A24] uppercase tracking-wider flex items-center gap-1.5">
               <span>{localGreeting.greeting}</span>
-              {profile.location && (
-                <span className="text-[#B7E4C7] font-normal lowercase">
-                  · {profile.location} ({localGreeting.timeString})
-                </span>
-              )}
             </span>
             <span className="text-xs text-[#B7E4C7]/90 font-medium">
               {profile.streakDays > 0 ? `${profile.streakDays} Day Continuous Streak` : 'Today is Day 1'}

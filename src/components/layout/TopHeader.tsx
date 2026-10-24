@@ -51,7 +51,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                     className="text-[10px] tracking-wider uppercase text-[#132A1F]/60 hover:text-[#132A1F] font-semibold flex items-center gap-1"
                   >
                     <span>Healno</span>
-                    <span className="text-[9px] bg-[#E8EFE9] text-[#2D6A4F] px-1 rounded">Website ↗</span>
                   </button>
                 </div>
                 <h1 className="text-xl md:text-2xl font-bold text-[#132A1F] font-display leading-none">

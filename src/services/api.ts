@@ -185,12 +185,12 @@ export const apiService = {
     }
   },
 
-  generatePersonalizedMeal: async (energyLevel: number, dietaryPreferences: string[], availableIngredients?: string, prepTimeMax?: number) => {
+  generatePersonalizedMeal: async (energyLevel: number, dietaryPreferences: string[], availableIngredients?: string, prepTimeMax?: number, culinaryStyle?: string) => {
     try {
       const response = await fetch('/api/recipe-generator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ energyLevel, dietaryPreferences, availableIngredients, prepTimeMax }),
+        body: JSON.stringify({ energyLevel, dietaryPreferences, availableIngredients, prepTimeMax, culinaryStyle }),
       });
       if (!response.ok) {
         throw new Error(`Recipe generator responded with ${response.status}`);
@@ -246,12 +246,14 @@ export const apiService = {
     energyLevelOrProfile: number | UserProfile,
     dietaryPreferences?: string[] | number,
     allergies?: string[],
-    conditions?: string[]
+    conditions?: string[],
+    culinaryStyle?: string
   ) => {
     let energyLevel = 5;
     let prefs: string[] = [];
     let allergyList: string[] = [];
     let conditionList: string[] = [];
+    let style = culinaryStyle || 'Indian Style';
 
     if (typeof energyLevelOrProfile === 'object' && energyLevelOrProfile !== null) {
       const p = energyLevelOrProfile as UserProfile;
@@ -270,7 +272,7 @@ export const apiService = {
       const response = await fetch('/api/daily-meal-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ energyLevel, dietaryPreferences: prefs, allergies: allergyList, conditions: conditionList }),
+        body: JSON.stringify({ energyLevel, dietaryPreferences: prefs, allergies: allergyList, conditions: conditionList, culinaryStyle: style }),
       });
       if (!response.ok) {
         throw new Error(`Daily meal plan API responded with ${response.status}`);

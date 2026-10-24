@@ -345,7 +345,7 @@ Provide a JSON object containing:
 // Spoon-Aware Personalized Meal Generator
 app.post('/api/recipe-generator', async (req, res) => {
   try {
-    const { energyLevel, dietaryPreferences, availableIngredients, prepTimeMax } = req.body;
+    const { energyLevel, dietaryPreferences, availableIngredients, prepTimeMax, culinaryStyle } = req.body;
 
     if (!OPENROUTER_API_KEY) {
       return res.json({
@@ -360,12 +360,15 @@ app.post('/api/recipe-generator', async (req, res) => {
       });
     }
 
-    const prompt = `Generate a nourishing, personalized recipe designed for a person managing chronic health conditions in JSON format.
+    const prompt = `Generate a nourishing, unique recipe designed for a person managing chronic health conditions in JSON format.
 Constraints:
+- Daily Variation Seed: ${new Date().toISOString()}
+- Culinary / Regional Style: ${culinaryStyle || 'Wholesome Balanced'}
 - User Current Spoon/Energy Level: ${energyLevel}/10
 - Dietary Preferences: ${(dietaryPreferences || []).join(', ') || 'Wholesome balanced'}
 - Available Ingredients: ${availableIngredients || 'Pantry staples'}
 - Max Prep Time: ${prepTimeMax || 15} minutes
+- Micronutrient Requirements: Ensure recipe is rich in bioavailable vitamins, minerals, electrolytes, and anti-inflammatory antioxidants tailored for gentle digestion and steady energy.
 
 Format as JSON with:
 recipeName, prepTimeMinutes, energySpoonCost (1 to 3), difficulty ("Low Effort" | "Moderate"), ingredients (array), instructions (array), lowEffortAlternative (string), nutritionNotes (string).`;
@@ -423,7 +426,7 @@ Format as JSON:
 // Daily Meal Plan Generator
 app.post('/api/daily-meal-plan', async (req, res) => {
   try {
-    const { energyLevel, dietaryPreferences, allergies, conditions } = req.body;
+    const { energyLevel, dietaryPreferences, allergies, conditions, culinaryStyle } = req.body;
 
     if (!OPENROUTER_API_KEY) {
       return res.json({
@@ -437,11 +440,14 @@ app.post('/api/daily-meal-plan', async (req, res) => {
       });
     }
 
-    const prompt = `Generate a complete, supportive, 1-day personalized meal plan (Breakfast, Lunch, Dinner, Snack) in JSON format for a person managing chronic health conditions.
-- Conditions: ${(conditions || []).join(', ')}
-- Preferences: ${(dietaryPreferences || []).join(', ')}
-- Allergies to avoid: ${(allergies || []).join(', ')}
-- Energy Level: ${energyLevel ?? 6} / 10
+    const prompt = `Generate a complete, supportive, unique 1-day personalized meal plan (Breakfast, Lunch, Dinner, Snack) in JSON format for a person managing chronic health conditions.
+- Date / Daily Variation Seed: ${new Date().toISOString()}
+- Culinary / Regional Style: ${culinaryStyle || 'Wholesome Balanced'}
+- Known Conditions: ${(conditions || []).join(', ') || 'None specified'}
+- Dietary Preferences: ${(dietaryPreferences || []).join(', ')}
+- Allergies to strictly avoid: ${(allergies || []).join(', ')}
+- Energy Level / Spoons: ${energyLevel ?? 6} / 10
+- Micronutrient Focus: Ensure recipes are rich in essential micronutrients (magnesium, potassium, B-complex, iron, omega-3 fatty acids, and anti-inflammatory antioxidants) tailored for steady energy and gentle digestion.
 
 Return pure JSON with schema:
 {

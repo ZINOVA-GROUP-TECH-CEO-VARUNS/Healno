@@ -39,6 +39,7 @@ export const MealsScreen: React.FC<MealsScreenProps> = ({
   const [activeTab, setActiveTab] = useState<'dailyPlan' | 'recipes'>('dailyPlan');
   const [dailyPlan, setDailyPlan] = useState<DailyMealPlan | null>(() => storageService.getDailyMealPlan());
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [culinaryStyle, setCulinaryStyle] = useState('Indian Style');
 
   // Single recipe state
   const [selectedMeal, setSelectedMeal] = useState<MealRecipe | null>(meals[0] || null);
@@ -56,7 +57,13 @@ export const MealsScreen: React.FC<MealsScreenProps> = ({
   const handleGenerateDailyPlan = async () => {
     setIsGeneratingPlan(true);
     try {
-      const plan = await apiService.generateDailyMealPlan(effectiveProfile, remainingSpoons);
+      const plan = await apiService.generateDailyMealPlan(
+        effectiveProfile, 
+        remainingSpoons, 
+        effectiveProfile.allergies, 
+        effectiveProfile.conditions, 
+        culinaryStyle
+      );
       const fullPlan: DailyMealPlan = {
         id: `plan_${Date.now()}`,
         date: new Date().toISOString().split('T')[0],
@@ -90,7 +97,8 @@ export const MealsScreen: React.FC<MealsScreenProps> = ({
         energyLevel,
         userDietaryPreferences,
         ingredientsInput,
-        prepMax
+        prepMax,
+        culinaryStyle
       );
 
       const newRecipe: MealRecipe = {
@@ -183,6 +191,24 @@ export const MealsScreen: React.FC<MealsScreenProps> = ({
                 <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingPlan ? 'animate-spin' : ''}`} />
                 <span>{isGeneratingPlan ? 'Generating...' : dailyPlan ? 'Refresh Plan' : 'Generate Plan'}</span>
               </button>
+            </div>
+
+            {/* Culinary Style Selector */}
+            <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+              <span className="text-xs text-white/80 font-medium">Regional / Culinary Style:</span>
+              <select
+                value={culinaryStyle}
+                onChange={(e) => setCulinaryStyle(e.target.value)}
+                className="bg-white/10 text-white border border-white/20 rounded-xl px-3 py-1.5 text-xs outline-none cursor-pointer"
+              >
+                <option value="Indian Style" className="text-gray-900">Indian Style</option>
+                <option value="American" className="text-gray-900">American</option>
+                <option value="Mediterranean" className="text-gray-900">Mediterranean</option>
+                <option value="East Asian" className="text-gray-900">East Asian</option>
+                <option value="Latin American" className="text-gray-900">Latin American</option>
+                <option value="Middle Eastern" className="text-gray-900">Middle Eastern</option>
+                <option value="Standard Wholesome" className="text-gray-900">Standard Wholesome</option>
+              </select>
             </div>
 
             {dailyPlan?.dietaryNotes && (
