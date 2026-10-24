@@ -2,16 +2,23 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import dotenv from 'dotenv';
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || "",
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json({ limit: '15mb' }));
-
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free';
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -19,9 +26,9 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     app: 'Healno',
     timestamp: new Date().toISOString(),
-    aiReady: !!OPENROUTER_API_KEY,
-    provider: 'OpenRouter',
-    model: OPENROUTER_MODEL,
+    aiReady: !!process.env.GEMINI_API_KEY,
+    provider: 'Gemini',
+    model: 'gemini-3.8-flash',
   });
 });
 
@@ -63,122 +70,54 @@ function safeJsonParse(text: string) {
   }
 }
 
-async function callOpenRouter(messages: any[], systemInstruction?: string, jsonMode = false, signal?: AbortSignal) {
-  if (!OPENROUTER_API_KEY) {
-    throw new Error('OPENROUTER_API_KEY is not configured. Please set OPENROUTER_API_KEY in environment variables.');
+async function callGemini(messages: any[], systemInstruction?: string, jsonMode = false) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not configured.');
   }
 
-  const formattedMessages = [];
-  if (systemInstruction) {
-    formattedMessages.push({ role: 'system', content: systemInstruction });
-  }
-  for (const m of messages) {
-    formattedMessages.push({
-      role: m.role === 'model' || m.role === 'assistant' ? 'assistant' : 'user',
-      content: m.content || '',
-    });
-  }
+  const contents = messages.map(m => ({
+    role: m.role === 'model' || m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content || '' }]
+  }));
 
-  const payload: any = {
-    model: OPENROUTER_MODEL,
-    messages: formattedMessages,
+  const config: any = {
     temperature: 0.7,
   };
-
+  if (systemInstruction) config.systemInstruction = systemInstruction;
   if (jsonMode) {
-    payload.response_format = { type: 'json_object' };
+    config.responseMimeType = "application/json";
   }
 
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-      'HTTP-Referer': process.env.APP_URL || 'https://healno-app.example',
-      'X-Title': 'Healno AI Assistant',
-    },
-    body: JSON.stringify(payload),
-    signal,
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.0-flash',
+    contents,
+    config
   });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`OpenRouter API error (${res.status}): ${errText}`);
-  }
-
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content || '';
+  return response.text || '';
 }
 
-async function streamOpenRouter(messages: any[], systemInstruction: string, onChunk: (text: string) => void, signal?: AbortSignal) {
-  if (!OPENROUTER_API_KEY) {
-    throw new Error('OPENROUTER_API_KEY is not configured. Please set OPENROUTER_API_KEY in environment variables.');
+async function streamGemini(messages: any[], systemInstruction: string, onChunk: (text: string) => void, signal?: AbortSignal) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not configured.');
   }
 
-  const formattedMessages = [];
-  if (systemInstruction) {
-    formattedMessages.push({ role: 'system', content: systemInstruction });
-  }
-  for (const m of messages) {
-    formattedMessages.push({
-      role: m.role === 'model' || m.role === 'assistant' ? 'assistant' : 'user',
-      content: m.content || '',
-    });
-  }
+  const contents = messages.map(m => ({
+    role: m.role === 'model' || m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content || '' }]
+  }));
 
-  const payload = {
-    model: OPENROUTER_MODEL,
-    messages: formattedMessages,
-    temperature: 0.7,
-    stream: true,
-  };
-
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-      'HTTP-Referer': process.env.APP_URL || 'https://healno-app.example',
-      'X-Title': 'Healno AI Assistant',
-    },
-    body: JSON.stringify(payload),
-    signal,
+  const responseStream = await ai.models.generateContentStream({
+    model: 'gemini-2.0-flash',
+    contents,
+    config: {
+      systemInstruction,
+      temperature: 0.7,
+    }
   });
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`OpenRouter stream error (${res.status}): ${errText}`);
-  }
-
-  if (!res.body) {
-    throw new Error('Response body missing for OpenRouter stream');
-  }
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith('data:')) continue;
-      const dataStr = trimmed.slice(5).trim();
-      if (dataStr === '[DONE]') break;
-
-      try {
-        const parsed = JSON.parse(dataStr);
-        const content = parsed.choices?.[0]?.delta?.content;
-        if (content) {
-          onChunk(content);
-        }
-      } catch {}
+  for await (const chunk of responseStream) {
+    if (chunk.text) {
+      onChunk(chunk.text);
     }
   }
 }
@@ -195,9 +134,9 @@ app.post('/api/chat/stream', async (req, res) => {
     const { messages, userProfile, healthContext } = req.body;
     const systemInstruction = getSystemInstruction(userProfile, healthContext);
 
-    if (!OPENROUTER_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       const lastUserMsg = (messages && messages[messages.length - 1]?.content) || 'Hello';
-      const fallbackReply = `Please configure OPENROUTER_API_KEY in your environment variables. Regarding "${lastUserMsg}": I am ready to assist once connected.`;
+      const fallbackReply = `Please configure GEMINI_API_KEY in your environment variables. Regarding "${lastUserMsg}": I am ready to assist once connected.`;
       for (const word of fallbackReply.split(' ')) {
         res.write(`data: ${JSON.stringify({ text: word + ' ' })}\n\n`);
         await new Promise((r) => setTimeout(r, 20));
@@ -206,7 +145,7 @@ app.post('/api/chat/stream', async (req, res) => {
       return res.end();
     }
 
-    await streamOpenRouter(
+    await streamGemini(
       messages || [],
       systemInstruction,
       (chunk) => {
@@ -219,7 +158,7 @@ app.post('/api/chat/stream', async (req, res) => {
     res.end();
   } catch (error: any) {
     console.error('Error in /api/chat/stream:', error);
-    res.write(`data: ${JSON.stringify({ text: `I'm listening and right here with you. OpenRouter connection note: ${error.message}` })}\n\n`);
+    res.write(`data: ${JSON.stringify({ text: `I'm listening and right here with you. Connection note: ${error.message}` })}\n\n`);
     res.write('data: [DONE]\n\n');
     res.end();
   }
@@ -231,16 +170,16 @@ app.post('/api/chat', async (req, res) => {
     const { messages, userProfile, healthContext } = req.body;
     const systemInstruction = getSystemInstruction(userProfile, healthContext);
 
-    if (!OPENROUTER_API_KEY) {
-      return res.status(401).json({ reply: 'OPENROUTER_API_KEY is not configured.', suggestedAction: null });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(401).json({ reply: 'GEMINI_API_KEY is not configured.', suggestedAction: null });
     }
 
-    const reply = await callOpenRouter(messages || [], systemInstruction);
+    const reply = await callGemini(messages || [], systemInstruction);
     res.json({ reply, suggestedAction: null });
   } catch (error: any) {
     console.error('Error in /api/chat:', error);
     res.status(500).json({
-      reply: "I'm listening and I'm right here with you. A momentary connection issue occurred with OpenRouter.",
+      reply: "I'm listening and I'm right here with you. A momentary connection issue occurred.",
       error: error.message,
     });
   }
@@ -251,13 +190,13 @@ app.post('/api/analyze-document', async (req, res) => {
   try {
     const { documentBase64, mimeType, filename } = req.body;
 
-    if (!OPENROUTER_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return res.json({
         documentType: 'Lab Report',
         provider: 'Community Health Partners',
         date: new Date().toISOString().split('T')[0],
         keyFindings: ['Document uploaded and saved successfully'],
-        plainLanguageSummary: 'Please configure OPENROUTER_API_KEY for automated AI document summarization and OCR analysis.',
+        plainLanguageSummary: 'Please configure GEMINI_API_KEY for automated AI document summarization and OCR analysis.',
         suggestedDoctorQuestions: ['What do these results mean for my daily symptoms?'],
         unverified: true,
       });
@@ -270,20 +209,11 @@ app.post('/api/analyze-document', async (req, res) => {
     const messages = [
       {
         role: 'user',
-        content: [
-          {
-            type: 'image_url',
-            image_url: { url: imageUrl }
-          },
-          {
-            type: 'text',
-            text: `Analyze this medical document or lab report named "${filename || 'health_document'}". Extract structured fields in JSON format with keys: documentType, provider, date, keyFindings (array of strings), plainLanguageSummary, and suggestedDoctorQuestions (array of strings). Do not diagnose. Always mark unverified.`
-          }
-        ]
+        content: `[Image Data: ${imageUrl}]\nAnalyze this medical document or lab report named "${filename || 'health_document'}". Extract structured fields in JSON format with keys: documentType, provider, date, keyFindings (array of strings), plainLanguageSummary, and suggestedDoctorQuestions (array of strings). Do not diagnose. Always mark unverified.`
       }
     ];
 
-    const responseText = await callOpenRouter(messages, 'You are a precise medical document analysis assistant that returns valid JSON.', true);
+    const responseText = await callGemini(messages, 'You are a precise medical document analysis assistant that returns valid JSON.', true);
     const parsed = safeJsonParse(responseText);
 
     res.json({
@@ -309,7 +239,7 @@ app.post('/api/doctor-prep', async (req, res) => {
   try {
     const { appointment, recentSymptoms, medications, notes } = req.body;
 
-    if (!OPENROUTER_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return res.json({
         conciseBrief: `Upcoming visit with ${appointment?.provider || 'Healthcare Provider'} (${appointment?.purpose || 'Health Review'}).`,
         talkingPoints: ['Frequency and timing of recent energy crashes', 'Current medication tolerability'],
@@ -333,7 +263,7 @@ Provide a JSON object containing:
 3. questionsForDoctor: 3 clear, direct questions to ask
 4. symptomSummary: 2-3 sentences summarizing symptom patterns.`;
 
-    const responseText = await callOpenRouter([{ role: 'user', content: prompt }], 'You are a clinical preparation assistant that returns valid JSON.', true);
+    const responseText = await callGemini([{ role: 'user', content: prompt }], 'You are a clinical preparation assistant that returns valid JSON.', true);
     const parsed = safeJsonParse(responseText);
     res.json(parsed);
   } catch (error: any) {
@@ -347,7 +277,7 @@ app.post('/api/recipe-generator', async (req, res) => {
   try {
     const { energyLevel, dietaryPreferences, availableIngredients, prepTimeMax, culinaryStyle } = req.body;
 
-    if (!OPENROUTER_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return res.json({
         recipeName: '10-Minute Soothing Ginger Miso Broth & Rice',
         prepTimeMinutes: 10,
@@ -373,7 +303,7 @@ Constraints:
 Format as JSON with:
 recipeName, prepTimeMinutes, energySpoonCost (1 to 3), difficulty ("Low Effort" | "Moderate"), ingredients (array), instructions (array), lowEffortAlternative (string), nutritionNotes (string).`;
 
-    const responseText = await callOpenRouter([{ role: 'user', content: prompt }], 'You are a nutritional assistant that returns valid JSON.', true);
+    const responseText = await callGemini([{ role: 'user', content: prompt }], 'You are a nutritional assistant that returns valid JSON.', true);
     const parsed = safeJsonParse(responseText);
     res.json(parsed);
   } catch (error: any) {
@@ -387,9 +317,9 @@ app.post('/api/document-qa', async (req, res) => {
   try {
     const { question, document, userProfile } = req.body;
 
-    if (!OPENROUTER_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return res.json({
-        answer: `Regarding "${question}": Please configure OPENROUTER_API_KEY for advanced document Q&A analysis.`,
+        answer: `Regarding "${question}": Please configure GEMINI_API_KEY for advanced document Q&A analysis.`,
         extractedFacts: document?.keyFindings || [],
         aiInterpretation: 'API key unconfigured.',
         doctorQuestions: document?.suggestedDoctorQuestions || ['How do these findings impact my current care plan?']
@@ -414,7 +344,7 @@ Format as JSON:
   "doctorQuestions": ["Question 1", "Question 2"]
 }`;
 
-    const responseText = await callOpenRouter([{ role: 'user', content: prompt }], 'You are a medical document Q&A assistant that returns valid JSON.', true);
+    const responseText = await callGemini([{ role: 'user', content: prompt }], 'You are a medical document Q&A assistant that returns valid JSON.', true);
     const parsed = safeJsonParse(responseText);
     res.json(parsed);
   } catch (error: any) {
@@ -428,7 +358,7 @@ app.post('/api/daily-meal-plan', async (req, res) => {
   try {
     const { energyLevel, dietaryPreferences, allergies, conditions, culinaryStyle } = req.body;
 
-    if (!OPENROUTER_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return res.json({
         id: `plan_${Date.now()}`,
         date: new Date().toISOString().split('T')[0],
@@ -460,7 +390,7 @@ Return pure JSON with schema:
   "dietaryNotes": "..."
 }`;
 
-    const responseText = await callOpenRouter([{ role: 'user', content: prompt }], 'You are a meal planning assistant that returns valid JSON.', true);
+    const responseText = await callGemini([{ role: 'user', content: prompt }], 'You are a meal planning assistant that returns valid JSON.', true);
     const parsed = safeJsonParse(responseText);
     res.json(parsed);
   } catch (error: any) {
@@ -487,7 +417,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🌿 Healno server listening on http://0.0.0.0:${PORT} (Provider: OpenRouter, Model: ${OPENROUTER_MODEL})`);
+    console.log(`🌿 Healno server listening on http://0.0.0.0:${PORT} (Provider: Gemini, Model: gemini-2.0-flash)`);
   });
 }
 

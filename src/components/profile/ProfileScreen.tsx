@@ -77,10 +77,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     initialTab || 'profile'
   );
 
-  // Location / TimeZone state
-  const [locationInput, setLocationInput] = useState(profile.location || '');
-  const [locationSavedNotice, setLocationSavedNotice] = useState(false);
-
   // Documents state
   const [documents, setDocuments] = useState<MedicalDocument[]>(() => storageService.getDocuments());
   const [isUploading, setIsUploading] = useState(false);
@@ -138,19 +134,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     return storageService.getHistoricalDayData(selectedCalendarDate);
   }, [selectedCalendarDate, profile, activeTab]);
 
-  // Handle Location save
-  const handleSaveLocation = (loc: string) => {
-    const tz = resolveTimeZone(loc);
-    const updated: UserProfile = {
-      ...profile,
-      location: loc.trim(),
-      timeZone: tz,
-    };
-    onUpdateProfile(updated);
-    storageService.setProfile(updated);
-    setLocationSavedNotice(true);
-    setTimeout(() => setLocationSavedNotice(false), 2500);
-  };
 
   const handleSaveHealthProfile = () => {
     const updated: UserProfile = {
