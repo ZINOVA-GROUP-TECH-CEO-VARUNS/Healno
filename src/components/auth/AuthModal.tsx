@@ -111,11 +111,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             isOnboarded: true,
           });
         } catch (signInErr: any) {
-          const rawName = email.split('@')[0].replace(/[._]/g, ' ');
-          const computedName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
           onLoginSuccess({
             email: email.trim(),
-            name: computedName || 'Friend',
+            name: 'Friend',
             isAuthenticated: true,
             isOnboarded: true,
           });
@@ -166,9 +164,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <span>Healno Health Vault</span>
             </div>
             <h2 className="text-xl font-bold font-display text-white">A Calm Space for Your Health</h2>
-            <p className="text-xs text-white/70">
-              {supabaseConfig.isConfigured ? '🟢 Supabase PostgreSQL & Auth Active' : '🟡 Local Encrypted Session'}
-            </p>
+
           </div>
 
           <div className="shrink-0 pl-3">
@@ -305,7 +301,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 className="w-full py-3 rounded-full bg-[#132A1F] hover:bg-[#2D6A4F] text-white font-bold text-xs shadow-md transition-colors font-display flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                <span>{authMode === 'login' ? 'Sign In to Healno' : 'Create Account'}</span>
+                <span>{authMode === 'login' ? 'Sign In' : 'Create Account'}</span>
               </button>
             </form>
           )}

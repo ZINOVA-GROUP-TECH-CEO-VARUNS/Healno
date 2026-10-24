@@ -77,10 +77,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   // Step 5: Daily-Life Impact
   const [impactAreas, setImpactAreas] = useState<string[]>([]);
-  const [symptomBehavior, setSymptomBehavior] = useState<string>('Fluctuates depending on activity');
+  const [symptomBehavior, setSymptomBehavior] = useState<string[]>([]);
   const [supportGoals, setSupportGoals] = useState<string[]>([]);
 
-  const [sharingPreference, setSharingPreference] = useState<string>('Personal reflection & tracking only');
+  const [sharingPreference, setSharingPreference] = useState<string[]>([]);
   const [trackingMethods, setTrackingMethods] = useState<string[]>([]);
 
   // Step 7: Dietary Focus
@@ -809,19 +809,19 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   ].map((opt) => (
                     <div
                       key={opt}
-                      onClick={() => setSymptomBehavior(prev => prev === opt ? '' : opt)}
+                      onClick={() => toggleItem(symptomBehavior, opt, setSymptomBehavior)}
                       className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
-                        symptomBehavior === opt
+                        symptomBehavior.includes(opt)
                           ? 'bg-[#FFF4EB] border-[#FF7A24] shadow-xs'
                           : 'bg-[#FAF8F5] border-[#132A1F]/10 hover:border-[#132A1F]/30'
                       }`}
                     >
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
-                        symptomBehavior === opt ? 'border-[#FF7A24] bg-[#FF7A24]' : 'border-[#132A1F]/30 bg-white'
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                        symptomBehavior.includes(opt) ? 'border-[#FF7A24] bg-[#FF7A24]' : 'border-[#132A1F]/30 bg-white'
                       }`}>
-                        {symptomBehavior === opt && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        {symptomBehavior.includes(opt) && <Check className="w-3 h-3 text-white" />}
                       </div>
-                      <span className={`text-xs ${symptomBehavior === opt ? 'font-bold text-[#FF7A24]' : 'text-[#132A1F]'}`}>
+                      <span className={`text-xs ${symptomBehavior.includes(opt) ? 'font-bold text-[#FF7A24]' : 'text-[#132A1F]'}`}>
                         {opt}
                       </span>
                     </div>
@@ -950,19 +950,19 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   ].map((pref) => (
                     <div
                       key={pref}
-                      onClick={() => setSharingPreference(prev => prev === pref ? '' : pref)}
+                      onClick={() => toggleItem(sharingPreference, pref, setSharingPreference)}
                       className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
-                        sharingPreference === pref
+                        sharingPreference.includes(pref)
                           ? 'bg-[#FFF4EB] border-[#FF7A24]'
                           : 'bg-[#FAF8F5] border-[#132A1F]/10 hover:border-[#132A1F]/30'
                       }`}
                     >
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-0.5 transition-colors ${
-                        sharingPreference === pref ? 'border-[#FF7A24] bg-[#FF7A24]' : 'border-[#132A1F]/30 bg-white'
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center mt-0.5 transition-colors ${
+                        sharingPreference.includes(pref) ? 'border-[#FF7A24] bg-[#FF7A24]' : 'border-[#132A1F]/30 bg-white'
                       }`}>
-                        {sharingPreference === pref && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        {sharingPreference.includes(pref) && <Check className="w-3 h-3 text-white" />}
                       </div>
-                      <span className={`text-xs ${sharingPreference === pref ? 'font-bold text-[#FF7A24]' : 'text-[#132A1F]'}`}>
+                      <span className={`text-xs ${sharingPreference.includes(pref) ? 'font-bold text-[#FF7A24]' : 'text-[#132A1F]'}`}>
                         {pref}
                       </span>
                     </div>
@@ -1105,12 +1105,29 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   </button>
                 </div>
 
+                {/* Impact & Behavior review card */}
+                <div className="bg-white p-3.5 rounded-2xl border border-[#132A1F]/10 flex items-start justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF7A24]">Symptom Behavior</span>
+                    <div className="text-xs text-[#132A1F] font-semibold mt-0.5">
+                      {symptomBehavior.length > 0 ? symptomBehavior.join(', ') : 'None specified'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep(5)}
+                    className="text-xs text-[#FF7A24] font-bold hover:underline"
+                  >
+                    Edit
+                  </button>
+                </div>
+
                 {/* Impact & Preference */}
                 <div className="bg-white p-3.5 rounded-2xl border border-[#132A1F]/10 flex items-start justify-between">
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF7A24]">Healthcare Preferences</span>
                     <div className="text-xs text-[#132A1F] font-semibold mt-0.5">
-                      {sharingPreference || 'None specified'}
+                      {sharingPreference.length > 0 ? sharingPreference.join(', ') : 'None specified'}
                     </div>
                   </div>
                   <button

@@ -95,7 +95,9 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   const effectiveTasks = tasks || pacingTasks || [];
   const todayStr = new Date().toISOString().split('T')[0];
 
-  const displayName = profile.name?.trim() ? profile.name.split(' ')[0] : 'Friend';
+  const displayName = profile.name?.trim() && !profile.name.includes('@') 
+    ? profile.name.split(' ')[0] 
+    : 'Friend';
   const dailyCapacity = profile.dailySpoonsCapacity || 12;
 
   // Real local timezone greeting

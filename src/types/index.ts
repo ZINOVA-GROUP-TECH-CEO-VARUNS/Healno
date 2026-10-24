@@ -34,8 +34,8 @@ export interface UserProfile {
   isOnboarded: boolean;
   isAuthenticated: boolean;
   avatarUrl?: string;
-  symptomBehavior?: string;
-  sharingPreference?: string;
+  symptomBehavior?: string[];
+  sharingPreference?: string[];
 }
 
 export interface SymptomLog {

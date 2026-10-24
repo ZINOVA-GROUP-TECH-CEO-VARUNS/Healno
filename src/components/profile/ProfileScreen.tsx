@@ -105,8 +105,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [editedConditions, setEditedConditions] = useState<string[]>(profile.conditions || []);
   const [editedDietary, setEditedDietary] = useState<string[]>(profile.dietaryPreferences || []);
   const [editedAllergies, setEditedAllergies] = useState<string[]>(profile.allergies || []);
-  const [editedSymptomBehavior, setEditedSymptomBehavior] = useState(profile.symptomBehavior || '');
-  const [editedSharingPref, setEditedSharingPref] = useState(profile.sharingPreference || '');
+  const [editedSymptomBehavior, setEditedSymptomBehavior] = useState<string[]>(profile.symptomBehavior || []);
+  const [editedSharingPref, setEditedSharingPref] = useState<string[]>(profile.sharingPreference || []);
   const [healthSavedNotice, setHealthSavedNotice] = useState(false);
 
   // Custom inputs for adding new items
@@ -872,20 +872,31 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <div className="space-y-2 pt-2 border-t border-[#132A1F]/5">
               <label className="text-[10px] font-bold text-[#132A1F]/50 uppercase">Symptom Behavior</label>
               {isEditingHealth ? (
-                <select
-                  value={editedSymptomBehavior}
-                  onChange={(e) => setEditedSymptomBehavior(e.target.value)}
-                  className="w-full bg-[#FAF8F5] border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-[#FF7A24] outline-none"
-                >
-                  <option value="">Select behavior...</option>
-                  <option value="Fluctuates depending on activity and rest">Fluctuates with activity</option>
-                  <option value="Steady baseline with sudden flare-ups">Steady with flares</option>
-                  <option value="Triggered by stress, weather, or exertion">Triggered by factors</option>
-                  <option value="Gradually improving or still under investigation">Under investigation</option>
-                </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    'Fluctuates depending on activity and rest',
+                    'Steady baseline with sudden flare-ups',
+                    'Triggered by stress, weather, or exertion',
+                    'Gradually improving or still under investigation',
+                  ].map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => toggleListItem(editedSymptomBehavior, opt, setEditedSymptomBehavior)}
+                      className={`text-left p-2.5 rounded-xl border text-xs transition-all ${
+                        editedSymptomBehavior.includes(opt)
+                          ? 'bg-[#FF7A24] text-white border-[#FF7A24] font-bold shadow-xs'
+                          : 'bg-[#FAF8F5] text-[#132A1F]/70 border-[#132A1F]/10 hover:border-[#FF7A24]/30'
+                      }`}
+                    >
+                      {opt} {editedSymptomBehavior.includes(opt) && '✓'}
+                    </button>
+                  ))}
+                </div>
               ) : (
                 <p className="text-xs text-[#132A1F]/80">
-                  {profile.symptomBehavior || 'Not specified'}
+                  {profile.symptomBehavior && profile.symptomBehavior.length > 0 
+                    ? profile.symptomBehavior.join(', ') 
+                    : 'Not specified'}
                 </p>
               )}
             </div>
@@ -893,20 +904,31 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <div className="space-y-2 pt-2 border-t border-[#132A1F]/5">
               <label className="text-[10px] font-bold text-[#132A1F]/50 uppercase">Healno Use Plan</label>
               {isEditingHealth ? (
-                <select
-                  value={editedSharingPref}
-                  onChange={(e) => setEditedSharingPref(e.target.value)}
-                  className="w-full bg-[#FAF8F5] border border-[#132A1F]/15 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-[#FF7A24] outline-none"
-                >
-                  <option value="">Select plan...</option>
-                  <option value="Personal reflection & tracking only">Personal tracking</option>
-                  <option value="Prepare clinical summary notes before doctor appointments">Doctor preparation</option>
-                  <option value="Share exported symptom reports with my healthcare provider">Healthcare sharing</option>
-                  <option value="Manage my daily energy, tasks, and pacing">Energy management</option>
-                </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    'Personal reflection & tracking only',
+                    'Prepare clinical summary notes before doctor appointments',
+                    'Share exported symptom reports with my healthcare provider',
+                    'Manage my daily energy, tasks, and pacing',
+                  ].map((pref) => (
+                    <button
+                      key={pref}
+                      onClick={() => toggleListItem(editedSharingPref, pref, setEditedSharingPref)}
+                      className={`text-left p-2.5 rounded-xl border text-xs transition-all ${
+                        editedSharingPref.includes(pref)
+                          ? 'bg-[#FF7A24] text-white border-[#FF7A24] font-bold shadow-xs'
+                          : 'bg-[#FAF8F5] text-[#132A1F]/70 border-[#132A1F]/10 hover:border-[#FF7A24]/30'
+                      }`}
+                    >
+                      {pref} {editedSharingPref.includes(pref) && '✓'}
+                    </button>
+                  ))}
+                </div>
               ) : (
                 <p className="text-xs text-[#132A1F]/80">
-                  {profile.sharingPreference || 'Not specified'}
+                  {profile.sharingPreference && profile.sharingPreference.length > 0 
+                    ? profile.sharingPreference.join(', ') 
+                    : 'Not specified'}
                 </p>
               )}
             </div>
@@ -920,14 +942,28 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                       setEditedConditions([]);
                       setEditedDietary([]);
                       setEditedAllergies([]);
-                      setEditedSymptomBehavior('');
-                      setEditedSharingPref('');
+                      setEditedSymptomBehavior([]);
+                      setEditedSharingPref([]);
                     }
                   }}
                   className="text-[10px] bg-red-50 text-red-600 px-3 py-1.5 rounded-full font-bold hover:bg-red-100 transition-colors flex items-center gap-1.5 mx-auto"
                 >
                   <Trash2 className="w-3 h-3" />
                   <span>Reset All Onboarding Health Data</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (window.confirm('Restart Guided Onboarding? This will keep your current records but let you re-experience the setup flow.')) {
+                      onUpdateProfile({ ...profile, isOnboarded: false });
+                      storageService.setOnboardingCompleted(false);
+                      window.location.reload();
+                    }
+                  }}
+                  className="mt-3 text-[10px] bg-[#FFF4EB] text-[#FF7A24] px-4 py-2 rounded-full font-bold hover:bg-[#FFE0C8] transition-colors flex items-center gap-1.5 mx-auto border border-[#FF7A24]/20"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>Restart Guided Onboarding Flow</span>
                 </button>
               </div>
             )}

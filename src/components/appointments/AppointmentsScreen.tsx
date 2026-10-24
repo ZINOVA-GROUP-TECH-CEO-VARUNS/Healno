@@ -138,7 +138,7 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
         doctorName: doctorName.trim(),
         provider: doctorName.trim(),
         specialty: specialty.trim(),
-        location: clinicName.trim() || 'Local Clinic',
+        location: clinicName.trim() || 'Unspecified Facility',
         date,
         time,
         purpose: purpose.trim() || 'Health consultation',
@@ -154,7 +154,7 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
         doctorName: doctorName.trim(),
         provider: doctorName.trim(),
         specialty: specialty.trim(),
-        location: clinicName.trim() || 'Local Clinic',
+        location: clinicName.trim() || 'Unspecified Facility',
         date,
         time,
         purpose: purpose.trim() || 'Health consultation',
@@ -340,7 +340,7 @@ export const AppointmentsScreen: React.FC<AppointmentsScreenProps> = ({
             activeTab === 'directory' ? 'bg-[#FF7A24] text-white shadow-xs' : 'text-[#132A1F]/70 hover:text-[#132A1F]'
           }`}
         >
-          My Directory ({providers.length})
+          Hospitals & Labs ({providers.length})
         </button>
         <button
           onClick={() => setActiveTab('outreach')}

@@ -254,7 +254,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
                 Appointment Coordination & Briefs
               </h3>
               <p className="text-xs text-[#132A1F]/75 leading-relaxed">
-                Generate 1-page clinician consultation briefs with your top 3 functional questions. Discover local clinics, specialists, and labs with addresses and phone scripts for rescheduling.
+                Generate 1-page clinician consultation briefs with your top 3 functional questions. Manage your personal directory of hospitals, clinics, and specialists with addresses and phone scripts for rescheduling.
               </p>
             </div>
 

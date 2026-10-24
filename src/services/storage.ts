@@ -72,8 +72,8 @@ export const defaultProfile: UserProfile = {
   badges: [],
   isOnboarded: false,
   isAuthenticated: false,
-  symptomBehavior: 'Fluctuates depending on activity and rest',
-  sharingPreference: 'Personal reflection & tracking only',
+  symptomBehavior: [],
+  sharingPreference: [],
 };
 
 // Seed initial emotions (matches the reference image 420 score and 4 core emotions: Happy 48%, Sad 33%, Calm 27%, Anxious 40%)

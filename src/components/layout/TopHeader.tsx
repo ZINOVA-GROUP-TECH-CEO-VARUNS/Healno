@@ -26,7 +26,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onBackToWebsite,
 }) => {
   const [isSpoonModalOpen, setIsSpoonModalOpen] = useState(false);
-  const displayName = profile.name?.trim() ? profile.name.split(' ')[0] : 'Friend';
+  const displayName = profile.name?.trim() && !profile.name.includes('@') 
+    ? profile.name.split(' ')[0] 
+    : 'Friend';
 
   return (
     <>
